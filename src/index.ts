@@ -26,6 +26,7 @@ app.get('/', (req, res) => {
         </nav>
         <h1>Welcome to Express + Bun ${process.versions.bun} on Vercel 🚀</h1>
         <p>This is a minimal example without a database or forms.</p>
+        <p>Check out the <a href="/about">About</a> page for more information.</p>
         <img src="/logo.png" alt="Logo" width="120" />
       </body>
     </html>
