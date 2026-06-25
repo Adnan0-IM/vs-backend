@@ -2,14 +2,20 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./lib/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
+app.all("/api/auth/", toNodeHandler(auth));
+
 // enable CORS for all routes
 app.use(cors());
+
+app.use(express.json());
 
 // Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -21,7 +27,7 @@ app.get("/", (req, res) => {
     <html>
       <head>
         <meta charset="utf-8"/>
-        <title>Express + Bun ${process.versions.bun} on Vercel</title>
+        <title>Secure Document Verification System Api</title>
         <link rel="stylesheet" href="/style.css" />
       </head>
       <body>
@@ -31,8 +37,8 @@ app.get("/", (req, res) => {
           <a href="/api-data">API Data</a>
           <a href="/healthz">Health</a>
         </nav>
-        <h1>Welcome to Express + Bun ${process.versions.bun} on Vercel 🚀</h1>
-        <p>This is a minimal example without a database or forms.</p>
+        <h1>Welcome to Secure Document Verification System Api 🚀</h1>
+        <p>This is an API for the Secure Document Verification System for issuing and verifying documents.</p>
         <p>Check out the <a href="/about">About</a> page for more information.</p>
         <img src="/logo.png" alt="Logo" width="120" />
       </body>
