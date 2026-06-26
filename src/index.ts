@@ -10,10 +10,14 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-app.all("/api/auth/", toNodeHandler(auth));
+app.all("/api/auth/*splat", toNodeHandler(auth));
 
-// enable CORS for all routes
-app.use(cors());
+// enable CORS for localhost:5173 and localhost:5174
+app.use(cors({
+  origin: ["http://localhost:5173"],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+}));
 
 app.use(express.json());
 
