@@ -9,15 +9,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const port = 3000;
 
-app.all("/api/auth/*splat", toNodeHandler(auth));
-
-// enable CORS for localhost:5173 and localhost:5174
-app.use(cors({
+// enable CORS for localhost:5173
+const corsOptions = {
   origin: ["http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
-}));
+};
+
+app.use(cors(corsOptions));
+app.options("/api/auth/*splat", cors(corsOptions));
+
+app.all("/api/auth/*splat", toNodeHandler(auth));
 
 app.use(express.json());
 
@@ -67,4 +71,7 @@ app.get("/healthz", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+app.listen(port, () => {
+  console.log(`App listening on port ${port}`);
+});
 export default app;
