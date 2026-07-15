@@ -23,7 +23,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("/api/auth/*splat", cors(corsOptions));
+// app.options("/api/auth/*splat", cors(corsOptions));
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
