@@ -178,6 +178,7 @@ export async function getDashboardStats(req: Request, res: Response) {
         id: true,
         title: true,
         originalFilename: true,
+        fileUrl: true,
         fileSize: true,
         status: true,
         createdAt: true,

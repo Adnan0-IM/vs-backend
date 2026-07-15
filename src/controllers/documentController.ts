@@ -7,6 +7,11 @@ import {
   decryptPrivateKey,
 } from "../services/cryptoService.js";
 import crypto from "crypto";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import QRCode from "qrcode";
+import { UTApi } from "uploadthing/server";
+
+const utapi = new UTApi();
 
 // Helper to fetch file content as Buffer
 async function fetchFileBuffer(url: string): Promise<Buffer> {
@@ -67,7 +72,7 @@ export async function uploadAndSign(req: Request, res: Response) {
       });
     }
 
-    // Download document content to hash it
+    // Download document content to hash and embed QR code
     let fileBuffer: Buffer;
     try {
       fileBuffer = await fetchFileBuffer(fileUrl);
@@ -76,8 +81,69 @@ export async function uploadAndSign(req: Request, res: Response) {
       return res.status(400).json({ error: "Failed to download file from UploadThing url." });
     }
 
-    // Generate SHA-256 hash
-    const documentHash = hashDocument(fileBuffer);
+    // Generate verification token (UUID)
+    const verificationToken = crypto.randomUUID();
+
+    // Construct the verification URL
+    const host = req.headers.origin || "http://localhost:5173";
+    const verificationUrl = `${host}/verification?token=${verificationToken}`;
+
+    // Embed QR code into the PDF document
+    let modifiedPdfBuffer: Buffer;
+    try {
+      const qrBuffer = await QRCode.toBuffer(verificationUrl, {
+        type: "png",
+        width: 200,
+        margin: 1,
+      });
+
+      const pdfDoc = await PDFDocument.load(new Uint8Array(fileBuffer));
+      const pages = pdfDoc.getPages();
+      if (pages.length === 0) {
+        throw new Error("PDF has no pages");
+      }
+
+      const firstPage = pages[0];
+      const { width, height } = firstPage.getSize();
+      const qrImage = await pdfDoc.embedPng(new Uint8Array(qrBuffer));
+
+      const qrSize = 70;
+      const padding = 15;
+      const x = width - qrSize - padding;
+      const y = padding + 10; // offset a bit for the text
+
+      firstPage.drawImage(qrImage, {
+        x,
+        y,
+        width: qrSize,
+        height: qrSize,
+      });
+
+      // Draw "Scan to Verify" text centered below QR code
+      const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const text = "Scan to Verify";
+      const fontSize = 6;
+      const textWidth = font.widthOfTextAtSize(text, fontSize);
+      const textX = x + (qrSize - textWidth) / 2;
+      const textY = y - 8;
+
+      firstPage.drawText(text, {
+        x: textX,
+        y: textY,
+        size: fontSize,
+        font,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+
+      const modifiedPdfBytes = await pdfDoc.save();
+      modifiedPdfBuffer = Buffer.from(modifiedPdfBytes);
+    } catch (err: any) {
+      console.error("Error embedding QR code in PDF:", err);
+      return res.status(500).json({ error: "Failed to embed QR code in PDF document" });
+    }
+
+    // Generate SHA-256 hash of the QR-embedded PDF
+    const documentHash = hashDocument(modifiedPdfBuffer);
 
     // Decrypt organization private key
     let privateKeyPem: string;
@@ -91,18 +157,41 @@ export async function uploadAndSign(req: Request, res: Response) {
     // Sign the hash
     const digitalSignature = signHash(documentHash, privateKeyPem);
 
-    // Generate verification token (UUID)
-    const verificationToken = crypto.randomUUID();
+    // Upload the modified PDF back to UploadThing
+    let finalFileUrl = fileUrl;
+    let finalFileSize = modifiedPdfBuffer.length;
+    try {
+      const fileToUpload = new File([modifiedPdfBuffer], originalFilename, {
+        type: mimeType,
+      });
+      const uploadResponse = await utapi.uploadFiles([fileToUpload]);
+      const uploaded = uploadResponse[0];
+      if (!uploaded || uploaded.error) {
+        throw new Error(uploaded.error?.message || "Failed to upload signed PDF to storage");
+      }
+      finalFileUrl = uploaded.data.ufsUrl || (uploaded.data as any).url;
+    } catch (err: any) {
+      console.error("Error uploading modified PDF to UploadThing:", err);
+      return res.status(500).json({ error: "Failed to upload signed PDF to storage" });
+    }
 
-    // Create document record
+    // Delete the original uploaded PDF (the one without QR code) from UploadThing to clean up
+    try {
+      const fileKey = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+      await utapi.deleteFiles(fileKey);
+    } catch (err) {
+      console.warn("Failed to delete original PDF from UploadThing:", err);
+    }
+
+    // Create document record with updated file URL and hash
     const document = await client.signedDocument.create({
       data: {
         title,
         type: type || "Other",
         originalFilename,
-        fileUrl,
+        fileUrl: finalFileUrl,
         mimeType,
-        fileSize,
+        fileSize: finalFileSize,
         documentHash,
         digitalSignature,
         verificationToken,
