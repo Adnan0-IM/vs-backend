@@ -52,7 +52,7 @@ app.get("/", (req, res) => {
     <html>
       <head>
         <meta charset="utf-8"/>
-        <title>Secure Document Verification System Api</title>
+        <title>VeriDoc Api</title>
         <link rel="stylesheet" href="/style.css" />
       </head>
       <body>
@@ -62,8 +62,8 @@ app.get("/", (req, res) => {
           <a href="/api-data">API Data</a>
           <a href="/healthz">Health</a>
         </nav>
-        <h1>Welcome to Secure Document Verification System Api 🚀</h1>
-        <p>This is an API for the Secure Document Verification System for issuing and verifying documents.</p>
+        <h1>Welcome to <strong>VeriDoc</strong> Api 🚀</h1>
+        <p>API for issuing and verifying documents.</p>
         <p>Check out the <a href="/about">About</a> page for more information.</p>
         <img src="/logo.png" alt="Logo" width="120" />
       </body>
