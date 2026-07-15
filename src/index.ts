@@ -14,7 +14,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = 3000;
 
 // enable CORS for localhost:5173
 const corsOptions = {
@@ -89,7 +88,4 @@ app.get("/healthz", (req, res) => {
 });
 
 
-app.listen(port, () => {
-  console.log(`App listening on port ${port}`);
-});
 export default app;
