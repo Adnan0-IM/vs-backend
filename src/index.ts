@@ -4,6 +4,11 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
+import { createRouteHandler } from "uploadthing/express";
+
+import { uploadRouter } from "./uploadthing.js";
+import { organizationRouter } from "./routes/organizationRoutes.js";
+import { documentRouter } from "./routes/documentRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +18,7 @@ const port = 3000;
 
 // enable CORS for localhost:5173
 const corsOptions = {
-  origin: ["http://localhost:5173"],
+  origin: ["http://localhost:5173", "https://vs.adnanilyas.dev", "http://localhost:3000"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
 };
@@ -27,6 +32,18 @@ app.use(express.json());
 
 // Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, "..", "public")));
+
+
+app.use("/api/organization", organizationRouter);
+app.use("/api/documents", documentRouter);
+
+app.use(
+  "/api/uploadthing",
+  createRouteHandler({
+    router: uploadRouter,
+    // config: { ... },
+  }),
+);
 
 // Home route - HTML
 app.get("/", (req, res) => {
@@ -70,6 +87,7 @@ app.get("/api-data", (req, res) => {
 app.get("/healthz", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
 
 app.listen(port, () => {
   console.log(`App listening on port ${port}`);

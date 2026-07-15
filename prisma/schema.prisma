@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -19,6 +18,16 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime?
+
+  members     Member[]
+  invitations Invitation[]
+
+  // Documents signed by this user
+  signedDocuments SignedDocument[]
+
   @@unique([email])
   @@map("user")
 }
@@ -33,6 +42,10 @@ model Session {
   userAgent String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  impersonatedBy String?
+
+  activeOrganizationId String?
 
   @@unique([token])
   @@index([userId])
@@ -70,3 +83,155 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
+
+model Organization {
+  id          String       @id
+  name        String
+  slug        String
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+  members     Member[]
+  invitations Invitation[]
+
+  // RSA Key Pair for signing documents
+  publicKey           String?
+  privateKeyEncrypted String?
+
+  // Signed jDocument relation
+  documents SignedDocument[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           MemberRole?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// Signed Documents Table
+model SignedDocument {
+  id String @id @default(uuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  signedBy String
+  signer   User   @relation(fields: [signedBy], references: [id], onDelete: Restrict)
+
+  title String
+
+  originalFilename String
+
+  fileUrl String
+
+  mimeType String
+
+  fileSize Int
+
+  type DocumentType @default(Other)
+
+  // SHA-256 hash
+  documentHash String
+
+  // RSA digital signature
+  digitalSignature String
+
+  // Optional signed PDF
+  signedPdf String?
+
+  // Token encoded in QR Code
+  verificationToken String @unique
+
+  // ACTIVE, REVOKED, ARCHIVED
+  status DocumentStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  verificationLogs VerificationLog[]
+}
+
+// Verification Log Table
+model VerificationLog {
+  id String @id @default(uuid())
+
+  documentId String
+  document   SignedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  // QR_SCAN or FILE_UPLOAD
+  verificationType VerificationType
+
+  // VERIFIED, TAMPERED, NOT_FOUND
+  verificationResult VerificationResult
+
+  // Null if verified anonymously
+  verifiedByUserId String?
+
+  ipAddress String?
+
+  userAgent String?
+
+  verificationTimestamp DateTime @default(now())
+
+  @@index([documentId])
+}
+
+enum DocumentType {
+  Certificate
+  Transcript
+  Letter
+  Diploma
+  Other
+}
+
+enum DocumentStatus {
+  ACTIVE
+  REVOKED
+  ARCHIVED
+}
+
+enum VerificationType {
+  QR_SCAN
+  FILE_UPLOAD
+}
+
+enum VerificationResult {
+  VERIFIED
+  TAMPERED
+  NOT_FOUND
+}
+
+enum MemberRole {
+  owner
+  admin
+  member
+}
+

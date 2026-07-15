@@ -1,0 +1,547 @@
+import { Request, Response } from "express";
+import { client } from "../lib/auth.js";
+import {
+  hashDocument,
+  signHash,
+  verifySignature,
+  decryptPrivateKey,
+} from "../services/cryptoService.js";
+import crypto from "crypto";
+
+// Helper to fetch file content as Buffer
+async function fetchFileBuffer(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch file from URL: ${url}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Handle document uploading and signing
+ * Endpoint: POST /api/documents/upload-and-sign
+ */
+export async function uploadAndSign(req: Request, res: Response) {
+  try {
+    const { title, type, fileUrl, originalFilename, fileSize, mimeType } = req.body;
+
+    if (!title || !fileUrl || !originalFilename || !fileSize || !mimeType) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized: User not authenticated" });
+    }
+
+    const orgId = req.session?.activeOrganizationId;
+    if (!orgId) {
+      return res.status(400).json({ error: "No active organization selected" });
+    }
+
+    // Verify user is member of organization and has owner, admin, or signer role
+    const member = await client.member.findFirst({
+      where: {
+        organizationId: orgId,
+        userId: userId,
+      },
+    });
+
+    if (!member) {
+      return res.status(403).json({ error: "Forbidden: You are not a member of this organization" });
+    }
+
+    if (member.role !== "owner" && member.role !== "admin" && member.role !== "signer") {
+      return res.status(403).json({ error: "Forbidden: You do not have permissions to sign documents" });
+    }
+
+    // Fetch organization keys
+    const organization = await client.organization.findUnique({
+      where: { id: orgId },
+    });
+
+    if (!organization || !organization.publicKey || !organization.privateKeyEncrypted) {
+      return res.status(400).json({
+        error: "Organization keys not found. Please generate RSA keys in organization settings first.",
+      });
+    }
+
+    // Download document content to hash it
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await fetchFileBuffer(fileUrl);
+    } catch (err: any) {
+      console.error("Error downloading file:", err);
+      return res.status(400).json({ error: "Failed to download file from UploadThing url." });
+    }
+
+    // Generate SHA-256 hash
+    const documentHash = hashDocument(fileBuffer);
+
+    // Decrypt organization private key
+    let privateKeyPem: string;
+    try {
+      privateKeyPem = decryptPrivateKey(organization.privateKeyEncrypted);
+    } catch (err) {
+      console.error("Error decrypting private key:", err);
+      return res.status(500).json({ error: "Failed to decrypt organization private key" });
+    }
+
+    // Sign the hash
+    const digitalSignature = signHash(documentHash, privateKeyPem);
+
+    // Generate verification token (UUID)
+    const verificationToken = crypto.randomUUID();
+
+    // Create document record
+    const document = await client.signedDocument.create({
+      data: {
+        title,
+        type: type || "Other",
+        originalFilename,
+        fileUrl,
+        mimeType,
+        fileSize,
+        documentHash,
+        digitalSignature,
+        verificationToken,
+        organizationId: orgId,
+        signedBy: userId,
+        status: "ACTIVE",
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Document uploaded and signed successfully",
+      document,
+    });
+  } catch (error: any) {
+    console.error("Error in uploadAndSign:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * List all signed documents for the active organization
+ * Endpoint: GET /api/documents/list
+ */
+export async function listDocuments(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const orgId = req.session?.activeOrganizationId;
+    if (!orgId) {
+      return res.status(400).json({ error: "No active organization" });
+    }
+
+    // Verify member
+    const member = await client.member.findFirst({
+      where: {
+        organizationId: orgId,
+        userId: userId,
+      },
+    });
+
+    if (!member) {
+      return res.status(403).json({ error: "Forbidden: Not a member" });
+    }
+
+    const { search, type, status } = req.query as {
+      search?: string;
+      type?: any;
+      status?: any;
+    };
+
+    const whereClause: any = {
+      organizationId: orgId,
+    };
+
+    if (search) {
+      whereClause.OR = [
+        { title: { contains: search, mode: "insensitive" } },
+        { originalFilename: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    if (type) {
+      whereClause.type = type;
+    }
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    const documents = await client.signedDocument.findMany({
+      where: whereClause,
+      orderBy: { createdAt: "desc" },
+      include: {
+        signer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return res.status(200).json({ success: true, documents });
+  } catch (error) {
+    console.error("Error listing documents:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Revoke an issued document
+ * Endpoint: POST /api/documents/revoke
+ */
+export async function revokeDocument(req: Request, res: Response) {
+  try {
+    const { documentId } = req.body;
+    if (!documentId) {
+      return res.status(400).json({ error: "documentId is required" });
+    }
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const orgId = req.session?.activeOrganizationId;
+    if (!orgId) {
+      return res.status(400).json({ error: "No active organization" });
+    }
+
+    // Verify user is owner or admin in the organization
+    const member = await client.member.findFirst({
+      where: {
+        organizationId: orgId,
+        userId: userId,
+      },
+    });
+
+    if (!member || (member.role !== "owner" && member.role !== "admin")) {
+      return res.status(403).json({ error: "Forbidden: Only owners and admins can revoke documents" });
+    }
+
+    // Update document status
+    const result = await client.signedDocument.updateMany({
+      where: {
+        id: documentId,
+        organizationId: orgId,
+      },
+      data: {
+        status: "REVOKED",
+      },
+    });
+
+    if (result.count === 0) {
+      return res.status(404).json({ error: "Document not found or not part of this organization" });
+    }
+
+    return res.status(200).json({ success: true, message: "Document revoked successfully" });
+  } catch (error) {
+    console.error("Error revoking document:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Public route to verify a document by token (e.g. from QR scan)
+ * Endpoint: GET /api/documents/verify/:token
+ */
+export async function verifyDocumentByToken(req: Request, res: Response) {
+  try {
+    const { token } = req.params;
+    if (!token) {
+      return res.status(400).json({ error: "Verification token is required" });
+    }
+
+    const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+
+    // Find document
+    const document = await client.signedDocument.findUnique({
+      where: { verificationToken: token },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            publicKey: true,
+          },
+        },
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        result: "NOT_FOUND",
+        message: "Document not found or token is invalid.",
+      });
+    }
+
+    // Perform signature verification
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await fetchFileBuffer(document.fileUrl);
+    } catch (err) {
+      await client.verificationLog.create({
+        data: {
+          documentId: document.id,
+          verificationType: "QR_SCAN",
+          verificationResult: "TAMPERED",
+          ipAddress,
+          userAgent,
+        },
+      });
+      return res.status(400).json({
+        success: false,
+        result: "TAMPERED",
+        message: "Document file could not be retrieved from storage. It may have been modified or deleted.",
+      });
+    }
+
+    const currentHash = hashDocument(fileBuffer);
+    const hashMatch = currentHash === document.documentHash;
+
+    let signatureValid = false;
+    if (document.organization.publicKey) {
+      try {
+        signatureValid = verifySignature(
+          currentHash,
+          document.digitalSignature,
+          document.organization.publicKey
+        );
+      } catch (err) {
+        console.error("Signature verification error:", err);
+      }
+    }
+
+    const verified = hashMatch && signatureValid;
+    const resultStatus = verified ? "VERIFIED" : "TAMPERED";
+
+    // Get optional logged-in user who verified
+    let verifiedByUserId: string | null = null;
+    const session = await authClientSession(req);
+    if (session) {
+      verifiedByUserId = session.user.id;
+    }
+
+    // Log the verification attempt
+    await client.verificationLog.create({
+      data: {
+        documentId: document.id,
+        verificationType: "QR_SCAN",
+        verificationResult: resultStatus,
+        ipAddress,
+        userAgent,
+        verifiedByUserId,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      verified,
+      result: resultStatus,
+      documentStatus: document.status,
+      document: {
+        id: document.id,
+        title: document.title,
+        type: document.type,
+        originalFilename: document.originalFilename,
+        fileUrl: document.fileUrl,
+        fileSize: document.fileSize,
+        createdAt: document.createdAt,
+      },
+      organization: {
+        id: document.organization.id,
+        name: document.organization.name,
+      },
+    });
+  } catch (error) {
+    console.error("Error in verifyDocumentByToken:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Public route to verify a document by file URL (from uploaded file)
+ * Endpoint: POST /api/documents/verify-file
+ */
+export async function verifyDocumentByFile(req: Request, res: Response) {
+  try {
+    const { fileUrl } = req.body;
+    if (!fileUrl) {
+      return res.status(400).json({ error: "fileUrl is required in the body" });
+    }
+
+    const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+
+    // Download uploaded verification file
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await fetchFileBuffer(fileUrl);
+    } catch (err) {
+      return res.status(400).json({ error: "Failed to download uploaded file for verification" });
+    }
+
+    const fileHash = hashDocument(fileBuffer);
+
+    // Look up signed document by hash
+    const document = await client.signedDocument.findFirst({
+      where: { documentHash: fileHash },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            publicKey: true,
+          },
+        },
+      },
+    });
+
+    if (!document) {
+      return res.status(200).json({
+        success: false,
+        result: "NOT_FOUND",
+        message: "No document matching this file content was found in our system.",
+      });
+    }
+
+    // Verify digital signature
+    let signatureValid = false;
+    if (document.organization.publicKey) {
+      try {
+        signatureValid = verifySignature(
+          fileHash,
+          document.digitalSignature,
+          document.organization.publicKey
+        );
+      } catch (err) {
+        console.error("Signature verification error:", err);
+      }
+    }
+
+    const verified = signatureValid;
+    const resultStatus = verified ? "VERIFIED" : "TAMPERED";
+
+    // Get optional logged-in user who verified
+    let verifiedByUserId: string | null = null;
+    const session = await authClientSession(req);
+    if (session) {
+      verifiedByUserId = session.user.id;
+    }
+
+    // Log the verification attempt
+    await client.verificationLog.create({
+      data: {
+        documentId: document.id,
+        verificationType: "FILE_UPLOAD",
+        verificationResult: resultStatus,
+        ipAddress,
+        userAgent,
+        verifiedByUserId,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      verified,
+      result: resultStatus,
+      documentStatus: document.status,
+      document: {
+        id: document.id,
+        title: document.title,
+        type: document.type,
+        originalFilename: document.originalFilename,
+        fileUrl: document.fileUrl,
+        fileSize: document.fileSize,
+        createdAt: document.createdAt,
+      },
+      organization: {
+        id: document.organization.id,
+        name: document.organization.name,
+      },
+    });
+  } catch (error) {
+    console.error("Error in verifyDocumentByFile:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Fetch verification logs for active organization
+ * Endpoint: GET /api/documents/verification-logs
+ */
+export async function getVerificationLogs(req: Request, res: Response) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const orgId = req.session?.activeOrganizationId;
+    if (!orgId) {
+      return res.status(400).json({ error: "No active organization" });
+    }
+
+    // Verify member
+    const member = await client.member.findFirst({
+      where: {
+        organizationId: orgId,
+        userId: userId,
+      },
+    });
+
+    if (!member) {
+      return res.status(403).json({ error: "Forbidden: Not a member" });
+    }
+
+    const logs = await client.verificationLog.findMany({
+      where: {
+        document: {
+          organizationId: orgId,
+        },
+      },
+      orderBy: { verificationTimestamp: "desc" },
+      include: {
+        document: {
+          select: {
+            title: true,
+            originalFilename: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    return res.status(200).json({ success: true, logs });
+  } catch (error) {
+    console.error("Error listing verification logs:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// Helper to fetch session for optional verification logs tracking
+import { fromNodeHeaders } from "better-auth/node";
+import { auth } from "../lib/auth.js";
+async function authClientSession(req: Request) {
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    return session;
+  } catch {
+    return null;
+  }
+}
