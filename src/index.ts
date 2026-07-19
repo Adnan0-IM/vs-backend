@@ -3,9 +3,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
-import { auth } from "./lib/auth.js";
 import { createRouteHandler } from "uploadthing/express";
 
+import { auth } from "./lib/auth.js";
 import { uploadRouter } from "./uploadthing.js";
 import { organizationRouter } from "./routes/organizationRoutes.js";
 import { documentRouter } from "./routes/documentRoutes.js";
@@ -17,13 +17,17 @@ const app = express();
 
 // enable CORS for localhost:5173
 const corsOptions = {
-  origin: ["http://localhost:5173", "https://vs.adnanilyas.dev", "http://localhost:3000"],
+  origin: [
+    "http://localhost:5173",
+    "https://vs.adnanilyas.dev",
+    "http://localhost:3000",
+  ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
 };
 
 app.use(cors(corsOptions));
-// app.options("/api/auth/*splat", cors(corsOptions));
+app.options("/api/auth/*splat", cors(corsOptions));
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
@@ -31,7 +35,6 @@ app.use(express.json());
 
 // Serve static files from the "public" directory
 app.use(express.static(path.join(__dirname, "..", "public")));
-
 
 app.use("/api/organization", organizationRouter);
 app.use("/api/documents", documentRouter);
@@ -86,6 +89,5 @@ app.get("/api-data", (req, res) => {
 app.get("/healthz", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
-
 
 export default app;
