@@ -141,22 +141,6 @@ export async function uploadAndSign(req: Request, res: Response) {
         height: qrSize,
       });
 
-      // Draw "Scan to Verify" text centered below QR code
-      // const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      // const text = "Scan to Verify";
-      // const fontSize = 6;
-      // const textWidth = font.widthOfTextAtSize(text, fontSize);
-      // const textX = x + (qrSize - textWidth) / 2;
-      // const textY = y - 8;
-      //
-      // firstPage.drawText(text, {
-      //   x: textX,
-      //   y: textY,
-      //   size: fontSize,
-      //   font,
-      //   color: rgb(0.2, 0.2, 0.2),
-      // });
-
       const modifiedPdfBytes = await pdfDoc.save();
       modifiedPdfBuffer = Buffer.from(modifiedPdfBytes);
     } catch (err: any) {
