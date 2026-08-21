@@ -1,26 +1,30 @@
 import { createAccessControl } from "better-auth/plugins/access";
+import { defaultStatements, adminAc, ownerAc, memberAc } from "better-auth/plugins/organization/access";
 
+// 1. Merge default org statements with your custom ones
 export const statement = {
-	document: ["upload", "sign", "delete", "view"],
-	template: ["create", "manage"],
+    ...defaultStatements,           // ← THIS IS THE FIX: adds organization, member, invitation
+    document: ["upload", "sign", "delete", "view"],
+    template: ["create", "manage"],
 } as const;
 
 export const ac = createAccessControl(statement);
 
+// 2. Create roles that include BOTH default permissions AND your custom ones
 export const orgOwner = ac.newRole({
-	document: ["upload", "sign", "delete", "view"],
-	template: ["create", "manage"],
+    ...ownerAc.statements,          
+    document: ["upload", "sign", "delete", "view"],
+    template: ["create", "manage"],
 });
 
 export const orgAdmin = ac.newRole({
-	document: ["upload", "sign", "delete", "view"],
-	template: ["create", "manage"],
+    ...adminAc.statements,         
+    document: ["upload", "sign", "delete", "view"],
+    template: ["create", "manage"],
 });
 
-export const signer = ac.newRole({
-	document: ["upload", "sign", "view"],
-});
-
-export const viewer = ac.newRole({
-	document: ["view"],
+export const orgMember = ac.newRole({
+    ...memberAc.statements,         
+    document: ["upload", "sign", "view"],
+    template: ["create"],
 });

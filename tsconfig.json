@@ -3,7 +3,7 @@
     "target": "ESNext",
     "module": "NodeNext",
     "skipLibCheck": true,
-    "types": ["bun"]
+    "types": ["bun", "vitest/globals", "supertest"]
   },
   "exclude": ["node_modules"]
 }

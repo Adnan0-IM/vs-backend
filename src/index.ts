@@ -5,10 +5,10 @@ import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { createRouteHandler } from "uploadthing/express";
 
-import { auth } from "./lib/auth.js";
 import { uploadRouter } from "./uploadthing.js";
 import { organizationRouter } from "./routes/organizationRoutes.js";
 import { documentRouter } from "./routes/documentRoutes.js";
+import { auth } from "./lib/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,7 +48,7 @@ app.use(
 );
 
 // Home route - HTML
-app.get("/", (req, res) => {
+app.get("/", (_, res) => {
   res.type("html").send(`
     <!doctype html>
     <html>
@@ -60,34 +60,30 @@ app.get("/", (req, res) => {
       <body>
         <nav>
           <a href="/">Home</a>
-          <a href="/about">About</a>
-          <a href="/api-data">API Data</a>
           <a href="/healthz">Health</a>
         </nav>
-        <h1>Welcome to <strong>VeriDoc</strong> Api 🚀</h1>
-        <p>API for issuing and verifying documents.</p>
-        <p>Check out the <a href="/about">About</a> page for more information.</p>
+        <h1>Welcome to <strong>VeriDoc</strong> Api </h1>
+      <p>This is an API for issuing and verifying documents.</p>
+      <p>
+        A Final year Project by
+        <a href="https://adnanilyas.dev">Adnan Iliyasu</a>
+      </p>
+      <div>
+        <p>Hosted on</p>
         <img src="/logo.png" alt="Logo" width="120" />
+      </div>
       </body>
     </html>
   `);
 });
 
-app.get("/about", function (req, res) {
-  res.sendFile(path.join(__dirname, "..", "components", "about.htm"));
-});
-
-// Example API endpoint - JSON
-app.get("/api-data", (req, res) => {
-  res.json({
-    message: "Here is some sample API data",
-    items: ["apple", "banana", "cherry"],
-  });
-});
-
 // Health check
-app.get("/healthz", (req, res) => {
+app.get("/healthz", (_, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.listen(3000, () => {
+  console.log("Server running");
 });
 
 export default app;

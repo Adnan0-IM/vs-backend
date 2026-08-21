@@ -29,7 +29,8 @@ async function fetchFileBuffer(url: string): Promise<Buffer> {
  */
 export async function uploadAndSign(req: Request, res: Response) {
   try {
-    const { title, type, fileUrl, originalFilename, fileSize, mimeType } = req.body;
+    const { title, type, fileUrl, originalFilename, fileSize, mimeType } =
+      req.body;
 
     if (!title || !fileUrl || !originalFilename || !fileSize || !mimeType) {
       return res.status(400).json({ error: "Missing required fields" });
@@ -37,7 +38,9 @@ export async function uploadAndSign(req: Request, res: Response) {
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: "Unauthorized: User not authenticated" });
+      return res
+        .status(401)
+        .json({ error: "Unauthorized: User not authenticated" });
     }
 
     const orgId = req.session?.activeOrganizationId;
@@ -54,11 +57,23 @@ export async function uploadAndSign(req: Request, res: Response) {
     });
 
     if (!member) {
-      return res.status(403).json({ error: "Forbidden: You are not a member of this organization" });
+      return res
+        .status(403)
+        .json({
+          error: "Forbidden: You are not a member of this organization",
+        });
     }
 
-    if (member.role !== "owner" && member.role !== "admin" && member.role !== "signer") {
-      return res.status(403).json({ error: "Forbidden: You do not have permissions to sign documents" });
+    if (
+      member.role !== "owner" &&
+      member.role !== "admin" &&
+      member.role !== "signer"
+    ) {
+      return res
+        .status(403)
+        .json({
+          error: "Forbidden: You do not have permissions to sign documents",
+        });
     }
 
     // Fetch organization keys
@@ -66,9 +81,14 @@ export async function uploadAndSign(req: Request, res: Response) {
       where: { id: orgId },
     });
 
-    if (!organization || !organization.publicKey || !organization.privateKeyEncrypted) {
+    if (
+      !organization ||
+      !organization.publicKey ||
+      !organization.privateKeyEncrypted
+    ) {
       return res.status(400).json({
-        error: "Organization keys not found. Please generate RSA keys in organization settings first.",
+        error:
+          "Organization keys not found. Please generate RSA keys in organization settings first.",
       });
     }
 
@@ -78,7 +98,9 @@ export async function uploadAndSign(req: Request, res: Response) {
       fileBuffer = await fetchFileBuffer(fileUrl);
     } catch (err: any) {
       console.error("Error downloading file:", err);
-      return res.status(400).json({ error: "Failed to download file from UploadThing url." });
+      return res
+        .status(400)
+        .json({ error: "Failed to download file from UploadThing url." });
     }
 
     // Generate verification token (UUID)
@@ -120,26 +142,28 @@ export async function uploadAndSign(req: Request, res: Response) {
       });
 
       // Draw "Scan to Verify" text centered below QR code
-      const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      const text = "Scan to Verify";
-      const fontSize = 6;
-      const textWidth = font.widthOfTextAtSize(text, fontSize);
-      const textX = x + (qrSize - textWidth) / 2;
-      const textY = y - 8;
-
-      firstPage.drawText(text, {
-        x: textX,
-        y: textY,
-        size: fontSize,
-        font,
-        color: rgb(0.2, 0.2, 0.2),
-      });
+      // const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      // const text = "Scan to Verify";
+      // const fontSize = 6;
+      // const textWidth = font.widthOfTextAtSize(text, fontSize);
+      // const textX = x + (qrSize - textWidth) / 2;
+      // const textY = y - 8;
+      //
+      // firstPage.drawText(text, {
+      //   x: textX,
+      //   y: textY,
+      //   size: fontSize,
+      //   font,
+      //   color: rgb(0.2, 0.2, 0.2),
+      // });
 
       const modifiedPdfBytes = await pdfDoc.save();
       modifiedPdfBuffer = Buffer.from(modifiedPdfBytes);
     } catch (err: any) {
       console.error("Error embedding QR code in PDF:", err);
-      return res.status(500).json({ error: "Failed to embed QR code in PDF document" });
+      return res
+        .status(500)
+        .json({ error: "Failed to embed QR code in PDF document" });
     }
 
     // Generate SHA-256 hash of the QR-embedded PDF
@@ -151,7 +175,9 @@ export async function uploadAndSign(req: Request, res: Response) {
       privateKeyPem = decryptPrivateKey(organization.privateKeyEncrypted);
     } catch (err) {
       console.error("Error decrypting private key:", err);
-      return res.status(500).json({ error: "Failed to decrypt organization private key" });
+      return res
+        .status(500)
+        .json({ error: "Failed to decrypt organization private key" });
     }
 
     // Sign the hash
@@ -167,12 +193,16 @@ export async function uploadAndSign(req: Request, res: Response) {
       const uploadResponse = await utapi.uploadFiles([fileToUpload]);
       const uploaded = uploadResponse[0];
       if (!uploaded || uploaded.error) {
-        throw new Error(uploaded.error?.message || "Failed to upload signed PDF to storage");
+        throw new Error(
+          uploaded.error?.message || "Failed to upload signed PDF to storage",
+        );
       }
       finalFileUrl = uploaded.data.ufsUrl || (uploaded.data as any).url;
     } catch (err: any) {
       console.error("Error uploading modified PDF to UploadThing:", err);
-      return res.status(500).json({ error: "Failed to upload signed PDF to storage" });
+      return res
+        .status(500)
+        .json({ error: "Failed to upload signed PDF to storage" });
     }
 
     // Delete the original uploaded PDF (the one without QR code) from UploadThing to clean up
@@ -316,7 +346,11 @@ export async function revokeDocument(req: Request, res: Response) {
     });
 
     if (!member || (member.role !== "owner" && member.role !== "admin")) {
-      return res.status(403).json({ error: "Forbidden: Only owners and admins can revoke documents" });
+      return res
+        .status(403)
+        .json({
+          error: "Forbidden: Only owners and admins can revoke documents",
+        });
     }
 
     // Update document status
@@ -331,10 +365,14 @@ export async function revokeDocument(req: Request, res: Response) {
     });
 
     if (result.count === 0) {
-      return res.status(404).json({ error: "Document not found or not part of this organization" });
+      return res
+        .status(404)
+        .json({ error: "Document not found or not part of this organization" });
     }
 
-    return res.status(200).json({ success: true, message: "Document revoked successfully" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Document revoked successfully" });
   } catch (error) {
     console.error("Error revoking document:", error);
     return res.status(500).json({ error: "Internal server error" });
@@ -352,7 +390,8 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
       return res.status(400).json({ error: "Verification token is required" });
     }
 
-    const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
+    const ipAddress =
+      (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
     const userAgent = req.headers["user-agent"];
 
     // Find document
@@ -394,7 +433,8 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
       return res.status(400).json({
         success: false,
         result: "TAMPERED",
-        message: "Document file could not be retrieved from storage. It may have been modified or deleted.",
+        message:
+          "Document file could not be retrieved from storage. It may have been modified or deleted.",
       });
     }
 
@@ -407,7 +447,7 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
         signatureValid = verifySignature(
           currentHash,
           document.digitalSignature,
-          document.organization.publicKey
+          document.organization.publicKey,
         );
       } catch (err) {
         console.error("Signature verification error:", err);
@@ -472,7 +512,8 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
       return res.status(400).json({ error: "fileUrl is required in the body" });
     }
 
-    const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
+    const ipAddress =
+      (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress;
     const userAgent = req.headers["user-agent"];
 
     // Download uploaded verification file
@@ -480,7 +521,9 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     try {
       fileBuffer = await fetchFileBuffer(fileUrl);
     } catch (err) {
-      return res.status(400).json({ error: "Failed to download uploaded file for verification" });
+      return res
+        .status(400)
+        .json({ error: "Failed to download uploaded file for verification" });
     }
 
     const fileHash = hashDocument(fileBuffer);
@@ -503,7 +546,8 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
       return res.status(200).json({
         success: false,
         result: "NOT_FOUND",
-        message: "No document matching this file content was found in our system.",
+        message:
+          "No document matching this file content was found in our system.",
       });
     }
 
@@ -514,7 +558,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
         signatureValid = verifySignature(
           fileHash,
           document.digitalSignature,
-          document.organization.publicKey
+          document.organization.publicKey,
         );
       } catch (err) {
         console.error("Signature verification error:", err);
