@@ -14,16 +14,6 @@ export const auth = betterAuth({
   database: prismaAdapter(client, { provider: "postgresql" }),
   plugins: [
     organization({
-      additionalFields: {
-        publicKey: {
-          type: "string",
-          required: false,
-        },
-        privateKeyEncrypted: {
-          type: "string",
-          required: false,
-        },
-      },
       ac,
       roles: {
         owner: orgOwner,
