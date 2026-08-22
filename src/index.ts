@@ -82,8 +82,4 @@ app.get("/healthz", (_, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.listen(3000, () => {
-  console.log("Server running");
-});
-
 export default app;
