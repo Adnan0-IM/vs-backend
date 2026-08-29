@@ -24,6 +24,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "5.0.0",
     "@types/qrcode": "^1.5.5",
+    "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "4.1.11",
     "msw": "^2.15.0",
     "prisma": "^6.16.0",

@@ -213,7 +213,9 @@ describe("uploadAndSign controller", () => {
 
   it("returns 400 when fetch of file fails", async () => {
     // mock fetch to fail
-    globalThis.fetch = vi.fn(async () => ({ ok: false }) as any);
+    const mockFetch = vi.fn(async () => ({ ok: false }) as any) as unknown as typeof fetch;
+    mockFetch.preconnect = vi.fn();
+    globalThis.fetch = mockFetch;
 
     const req: any = {
       body: {
@@ -243,10 +245,12 @@ describe("uploadAndSign controller", () => {
 
   it("successfully signs and uploads document", async () => {
     // mock fetch to return ok and an ArrayBuffer
-    globalThis.fetch = vi.fn(
+    const mockFetch = vi.fn(
       async () =>
         ({ ok: true, arrayBuffer: async () => Buffer.from("pdf-data") }) as any,
-    );
+    ) as unknown as typeof fetch;
+    mockFetch.preconnect = vi.fn();
+    globalThis.fetch = mockFetch;
 
     (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
     (client.organization.findUnique as any).mockResolvedValue({
