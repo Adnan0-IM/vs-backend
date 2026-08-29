@@ -1,6 +1,6 @@
 {
   "bunVersion": "1.x",
-  "buildCommand": "prisma generate",
+  "buildCommand": "bunx prisma generate",
   "outputDirectory": "dist",
   "framework": "express",
   "functions": {

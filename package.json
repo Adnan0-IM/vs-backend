@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --bun run --watch src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "bunx prisma generate && tsc",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage"
