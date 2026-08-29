@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import "dotenv/config"
 
 // Derive a 32-byte key from the BETTER_AUTH_SECRET env var
 const ENCRYPTION_KEY = crypto

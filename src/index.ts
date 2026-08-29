@@ -18,6 +18,7 @@ import { uploadRouter } from "./uploadthing.js";
 import { organizationRouter } from "./routes/organizationRoutes.js";
 import { documentRouter } from "./routes/documentRoutes.js";
 import { auth } from "./lib/auth.js";
+import "dotenv/config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
