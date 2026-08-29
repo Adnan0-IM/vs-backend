@@ -1,3 +1,12 @@
+// Global error handlers for serverless environment
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
+
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
