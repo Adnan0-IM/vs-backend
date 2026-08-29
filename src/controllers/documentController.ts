@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { client } from "../lib/auth.js";
+import { prisma } from "../lib/prisma.js";
 import {
   hashDocument,
   signHash,
@@ -49,7 +49,7 @@ export async function uploadAndSign(req: Request, res: Response) {
     }
 
     // Verify user is member of organization and has owner, admin, or signer role
-    const member = await client.member.findFirst({
+    const member = await prisma.member.findFirst({
       where: {
         organizationId: orgId,
         userId: userId,
@@ -77,7 +77,7 @@ export async function uploadAndSign(req: Request, res: Response) {
     }
 
     // Fetch organization keys
-    const organization = await client.organization.findUnique({
+    const organization = await prisma.organization.findUnique({
       where: { id: orgId },
     });
 
@@ -198,7 +198,7 @@ export async function uploadAndSign(req: Request, res: Response) {
     }
 
     // Create document record with updated file URL and hash
-    const document = await client.signedDocument.create({
+    const document = await prisma.signedDocument.create({
       data: {
         title,
         type: type || "Other",
@@ -243,7 +243,7 @@ export async function listDocuments(req: Request, res: Response) {
     }
 
     // Verify member
-    const member = await client.member.findFirst({
+    const member = await prisma.member.findFirst({
       where: {
         organizationId: orgId,
         userId: userId,
@@ -279,7 +279,7 @@ export async function listDocuments(req: Request, res: Response) {
       whereClause.status = status;
     }
 
-    const documents = await client.signedDocument.findMany({
+    const documents = await prisma.signedDocument.findMany({
       where: whereClause,
       orderBy: { createdAt: "desc" },
       include: {
@@ -322,7 +322,7 @@ export async function revokeDocument(req: Request, res: Response) {
     }
 
     // Verify user is owner or admin in the organization
-    const member = await client.member.findFirst({
+    const member = await prisma.member.findFirst({
       where: {
         organizationId: orgId,
         userId: userId,
@@ -338,7 +338,7 @@ export async function revokeDocument(req: Request, res: Response) {
     }
 
     // Update document status
-    const result = await client.signedDocument.updateMany({
+    const result = await prisma.signedDocument.updateMany({
       where: {
         id: documentId,
         organizationId: orgId,
@@ -379,7 +379,7 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
     const userAgent = req.headers["user-agent"];
 
     // Find document
-    const document = await client.signedDocument.findUnique({
+    const document = await prisma.signedDocument.findUnique({
       where: { verificationToken: token },
       include: {
         organization: {
@@ -405,7 +405,7 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
     try {
       fileBuffer = await fetchFileBuffer(document.fileUrl);
     } catch (err) {
-      await client.verificationLog.create({
+      await prisma.verificationLog.create({
         data: {
           documentId: document.id,
           verificationType: "QR_SCAN",
@@ -449,7 +449,7 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
     }
 
     // Log the verification attempt
-    await client.verificationLog.create({
+    await prisma.verificationLog.create({
       data: {
         documentId: document.id,
         verificationType: "QR_SCAN",
@@ -513,7 +513,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     const fileHash = hashDocument(fileBuffer);
 
     // Look up signed document by hash
-    const document = await client.signedDocument.findFirst({
+    const document = await prisma.signedDocument.findFirst({
       where: { documentHash: fileHash },
       include: {
         organization: {
@@ -560,7 +560,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     }
 
     // Log the verification attempt
-    await client.verificationLog.create({
+    await prisma.verificationLog.create({
       data: {
         documentId: document.id,
         verificationType: "FILE_UPLOAD",
@@ -613,7 +613,7 @@ export async function getVerificationLogs(req: Request, res: Response) {
     }
 
     // Verify member
-    const member = await client.member.findFirst({
+    const member = await prisma.member.findFirst({
       where: {
         organizationId: orgId,
         userId: userId,
@@ -624,7 +624,7 @@ export async function getVerificationLogs(req: Request, res: Response) {
       return res.status(403).json({ error: "Forbidden: Not a member" });
     }
 
-    const logs = await client.verificationLog.findMany({
+    const logs = await prisma.verificationLog.findMany({
       where: {
         document: {
           organizationId: orgId,

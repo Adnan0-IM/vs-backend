@@ -1,3 +1,11 @@
 {
-  "bunVersion": "1.x"
+  "bunVersion": "1.x",
+  "buildCommand": "prisma generate",
+  "outputDirectory": "dist",
+  "framework": "express",
+  "functions": {
+    "src/index.ts": {
+      "maxDuration": 30
+    }
+  }
 }

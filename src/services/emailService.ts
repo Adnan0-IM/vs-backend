@@ -4,8 +4,18 @@ import dotenv from "dotenv";
 // Load environment variables from .env file
 dotenv.config();
 
-// Initialize Resend with API key from environment
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend lazily to avoid crashing on missing API key during module load
+let resendInstance: Resend | null = null;
+
+function getResend(): Resend {
+  if (!resendInstance) {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY environment variable is not set");
+    }
+    resendInstance = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendInstance;
+}
 
 /**
  * Send an invitation email to a user
@@ -24,6 +34,7 @@ export async function sendInvitationEmail(
     // Create email content based on role
     const roleDescription = getRoleDescription(role);
 
+    const resend = getResend();
     const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM || "onboarding@resend.dev",
       to: email,

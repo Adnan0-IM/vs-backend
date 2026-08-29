@@ -1,4 +1,3 @@
-import { PrismaClient } from "@prisma/client";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
@@ -7,11 +6,10 @@ import {
   generateInvitationLink,
   sendInvitationEmail,
 } from "../services/emailService.js";
-
-export const client = new PrismaClient();
+import { prisma } from "./prisma.js";
 
 export const auth = betterAuth({
-  database: prismaAdapter(client, { provider: "postgresql" }),
+  database: prismaAdapter(prisma, { provider: "postgresql" }),
   plugins: [
     organization({
       ac,

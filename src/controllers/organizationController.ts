@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { client } from "../lib/auth.js";
+import { prisma } from "../lib/prisma.js";
 import { generateKeyPair, encryptPrivateKey } from "../services/cryptoService.js";
 
 /**
@@ -19,7 +19,7 @@ export async function generateKeys(req: Request, res: Response) {
     }
 
     // Verify user is member of the organization and has owner or admin role
-    const member = await client.member.findFirst({
+    const member = await prisma.member.findFirst({
       where: {
         organizationId: orgId,
         userId: userId,
@@ -40,7 +40,7 @@ export async function generateKeys(req: Request, res: Response) {
     // Encrypt the Private Key before storing it
     const privateKeyEncrypted = encryptPrivateKey(privateKey);
 
-    const organization = await client.organization.update({
+    const organization = await prisma.organization.update({
       where: { id: orgId },
       data: {
         publicKey,
@@ -84,7 +84,7 @@ export async function getDashboardStats(req: Request, res: Response) {
     }
 
     // Verify user is a member of the organization
-    const member = await client.member.findFirst({
+    const member = await prisma.member.findFirst({
       where: {
         organizationId: orgId,
         userId: userId,
@@ -96,7 +96,7 @@ export async function getDashboardStats(req: Request, res: Response) {
     }
 
     // 1. Fetch organization details
-    const organizationRaw = await client.organization.findUnique({
+    const organizationRaw = await prisma.organization.findUnique({
       where: { id: orgId },
       select: {
         id: true,
@@ -135,20 +135,20 @@ export async function getDashboardStats(req: Request, res: Response) {
 
 
     // 2. Fetch stats
-    const totalDocuments = await client.signedDocument.count({
+    const totalDocuments = await prisma.signedDocument.count({
       where: { organizationId: orgId },
     });
 
-    const activeDocuments = await client.signedDocument.count({
+    const activeDocuments = await prisma.signedDocument.count({
       where: { organizationId: orgId, status: "ACTIVE" },
     });
 
-    const revokedDocuments = await client.signedDocument.count({
+    const revokedDocuments = await prisma.signedDocument.count({
       where: { organizationId: orgId, status: "REVOKED" },
     });
 
     // Fetch total verification logs for all organization documents
-    const verificationLogsCount = await client.verificationLog.count({
+    const verificationLogsCount = await prisma.verificationLog.count({
       where: {
         document: {
           organizationId: orgId,
@@ -156,7 +156,7 @@ export async function getDashboardStats(req: Request, res: Response) {
       },
     });
 
-    const successfulVerifications = await client.verificationLog.count({
+    const successfulVerifications = await prisma.verificationLog.count({
       where: {
         document: {
           organizationId: orgId,
@@ -170,7 +170,7 @@ export async function getDashboardStats(req: Request, res: Response) {
       : 100;
 
     // 3. Fetch recent documents
-    const recentDocuments = await client.signedDocument.findMany({
+    const recentDocuments = await prisma.signedDocument.findMany({
       where: { organizationId: orgId },
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -192,7 +192,7 @@ export async function getDashboardStats(req: Request, res: Response) {
     });
 
     // 4. Fetch recent verification activity / logs
-    const recentActivity = await client.verificationLog.findMany({
+    const recentActivity = await prisma.verificationLog.findMany({
       where: {
         document: {
           organizationId: orgId,
