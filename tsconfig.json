@@ -2,8 +2,12 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "skipLibCheck": true,
-    "types": ["bun", "vitest/globals", "supertest"]
+    "types": ["bun", "vitest/globals", "supertest"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true
   },
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "tests"]
 }
