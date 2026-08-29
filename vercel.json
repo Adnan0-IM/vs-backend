@@ -1,10 +1,10 @@
 {
   "bunVersion": "1.x",
-  "buildCommand": "bunx prisma generate",
+  "buildCommand": "bunx prisma generate && bunx tsc",
   "outputDirectory": "dist",
   "framework": "express",
   "functions": {
-    "src/index.ts": {
+    "dist/index.js": {
       "maxDuration": 30
     }
   }
