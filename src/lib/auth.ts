@@ -9,7 +9,6 @@ import {
 import { prisma } from "./prisma.js";
 import "dotenv/config";
 
-
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   plugins: [
