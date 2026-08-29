@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "skipLibCheck": true,
-    "types": ["bun", "vitest/globals", "supertest"],
+    "types": ["node", "vitest/globals", "supertest"],
     "outDir": "./dist",
     "rootDir": "./src",
     "declaration": true

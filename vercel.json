@@ -1,11 +1,13 @@
 {
-  "bunVersion": "1.x",
   "buildCommand": "bunx prisma generate && bunx tsc",
   "outputDirectory": "dist",
   "framework": "express",
   "functions": {
     "dist/index.js": {
-      "maxDuration": 30
+      "maxDuration": 60,
+      "runtime": "nodejs20.x"
     }
+  }
+}
   }
 }
