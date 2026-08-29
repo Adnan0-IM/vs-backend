@@ -1,3 +1,9 @@
 {
-  "bunVersion": "1.4.x"
+  "buildCommand": "bunx prisma generate && bunx tsc",
+  "outputDirectory": "dist",
+  "functions": {
+    "dist/index.js": {
+      "maxDuration": 60
+    }
+  }
 }
