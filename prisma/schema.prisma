@@ -225,7 +225,10 @@ enum VerificationType {
 
 enum VerificationResult {
   VERIFIED
-  TAMPERED
+  TAMPERED_HASH
+  TAMPERED_SIGNATURE
+  NO_MATCHING_RECORD
+  STORAGE_ERROR
   NOT_FOUND
 }
 

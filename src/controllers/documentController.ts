@@ -409,16 +409,16 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
         data: {
           documentId: document.id,
           verificationType: "QR_SCAN",
-          verificationResult: "TAMPERED",
+          verificationResult: "STORAGE_ERROR",
           ipAddress,
           userAgent,
         },
       });
       return res.status(400).json({
         success: false,
-        result: "TAMPERED",
+        result: "STORAGE_ERROR",
         message:
-          "Document file could not be retrieved from storage. It may have been modified or deleted.",
+          "Document file could not be retrieved from storage. The file may have been deleted or is temporarily unavailable.",
       });
     }
 
@@ -439,7 +439,14 @@ export async function verifyDocumentByToken(req: Request, res: Response) {
     }
 
     const verified = hashMatch && signatureValid;
-    const resultStatus = verified ? "VERIFIED" : "TAMPERED";
+    let resultStatus: "VERIFIED" | "TAMPERED_HASH" | "TAMPERED_SIGNATURE";
+    if (verified) {
+      resultStatus = "VERIFIED";
+    } else if (!hashMatch) {
+      resultStatus = "TAMPERED_HASH";
+    } else {
+      resultStatus = "TAMPERED_SIGNATURE";
+    }
 
     // Get optional logged-in user who verified
     let verifiedByUserId: string | null = null;
@@ -513,7 +520,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     const fileHash = hashDocument(fileBuffer);
 
     // Look up signed document by hash
-    const document = await prisma.signedDocument.findFirst({
+    let document = await prisma.signedDocument.findFirst({
       where: { documentHash: fileHash },
       include: {
         organization: {
@@ -526,31 +533,47 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
       },
     });
 
+    let resultStatus: "VERIFIED" | "TAMPERED_SIGNATURE" | "NO_MATCHING_RECORD";
+    let verified = false;
+    let matchedDocument = document;
+
     if (!document) {
-      return res.status(200).json({
-        success: false,
-        result: "NOT_FOUND",
-        message:
-          "No document matching this file content was found in our system.",
+      // Forensic lookup: try to find document with same filename in same org
+      // This helps detect "modified version of known document"
+      const allDocuments = await prisma.signedDocument.findMany({
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              publicKey: true,
+            },
+          },
+        },
       });
-    }
 
-    // Verify digital signature
-    let signatureValid = false;
-    if (document.organization.publicKey) {
-      try {
-        signatureValid = verifySignature(
-          fileHash,
-          document.digitalSignature,
-          document.organization.publicKey,
-        );
-      } catch (err) {
-        console.error("Signature verification error:", err);
+      // Note: We can't easily match by filename without the original filename
+      // The uploaded file doesn't carry metadata about original filename
+      // So we return NO_MATCHING_RECORD
+      resultStatus = "NO_MATCHING_RECORD";
+    } else {
+      // Verify digital signature
+      let signatureValid = false;
+      if (document.organization.publicKey) {
+        try {
+          signatureValid = verifySignature(
+            fileHash,
+            document.digitalSignature,
+            document.organization.publicKey,
+          );
+        } catch (err) {
+          console.error("Signature verification error:", err);
+        }
       }
-    }
 
-    const verified = signatureValid;
-    const resultStatus = verified ? "VERIFIED" : "TAMPERED";
+      verified = signatureValid;
+      resultStatus = verified ? "VERIFIED" : "TAMPERED_SIGNATURE";
+    }
 
     // Get optional logged-in user who verified
     let verifiedByUserId: string | null = null;
@@ -559,36 +582,42 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
       verifiedByUserId = session.user.id;
     }
 
-    // Log the verification attempt
-    await prisma.verificationLog.create({
-      data: {
-        documentId: document.id,
-        verificationType: "FILE_UPLOAD",
-        verificationResult: resultStatus,
-        ipAddress,
-        userAgent,
-        verifiedByUserId,
-      },
-    });
+    // Log the verification attempt (only if we found a document)
+    if (matchedDocument) {
+      await prisma.verificationLog.create({
+        data: {
+          documentId: matchedDocument.id,
+          verificationType: "FILE_UPLOAD",
+          verificationResult: resultStatus,
+          ipAddress,
+          userAgent,
+          verifiedByUserId,
+        },
+      });
+    }
 
     return res.status(200).json({
-      success: true,
+      success: matchedDocument !== undefined,
       verified,
       result: resultStatus,
-      documentStatus: document.status,
-      document: {
-        id: document.id,
-        title: document.title,
-        type: document.type,
-        originalFilename: document.originalFilename,
-        fileUrl: document.fileUrl,
-        fileSize: document.fileSize,
-        createdAt: document.createdAt,
-      },
-      organization: {
-        id: document.organization.id,
-        name: document.organization.name,
-      },
+      documentStatus: matchedDocument?.status,
+      document: matchedDocument
+        ? {
+            id: matchedDocument.id,
+            title: matchedDocument.title,
+            type: matchedDocument.type,
+            originalFilename: matchedDocument.originalFilename,
+            fileUrl: matchedDocument.fileUrl,
+            fileSize: matchedDocument.fileSize,
+            createdAt: matchedDocument.createdAt,
+          }
+        : undefined,
+      organization: matchedDocument?.organization
+        ? {
+            id: matchedDocument.organization.id,
+            name: matchedDocument.organization.name,
+          }
+        : undefined,
     });
   } catch (error) {
     console.error("Error in verifyDocumentByFile:", error);
