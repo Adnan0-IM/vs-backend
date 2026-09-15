@@ -520,7 +520,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     const fileHash = hashDocument(fileBuffer);
 
     // Look up signed document by hash
-    let document = await prisma.signedDocument.findFirst({
+    const document = await prisma.signedDocument.findFirst({
       where: { documentHash: fileHash },
       include: {
         organization: {
@@ -538,23 +538,9 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     let matchedDocument = document;
 
     if (!document) {
-      // Forensic lookup: try to find document with same filename in same org
-      // This helps detect "modified version of known document"
-      const allDocuments = await prisma.signedDocument.findMany({
-        include: {
-          organization: {
-            select: {
-              id: true,
-              name: true,
-              publicKey: true,
-            },
-          },
-        },
-      });
-
-      // Note: We can't easily match by filename without the original filename
-      // The uploaded file doesn't carry metadata about original filename
-      // So we return NO_MATCHING_RECORD
+      // No document with this exact hash exists.
+      // The file was either never signed or has been modified (even by 1 byte).
+      // SHA-256 is deterministic - any change produces a completely different hash.
       resultStatus = "NO_MATCHING_RECORD";
     } else {
       // Verify digital signature
