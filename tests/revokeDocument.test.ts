@@ -1,23 +1,8 @@
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import request from "supertest";
-
-// Mock auth and prisma client before importing controllers/app
-vi.mock("../src/lib/auth.js", () => {
-  const getSession = vi.fn();
-  const getActiveMember = vi.fn();
-  const auth = { api: { getSession, getActiveMember } };
-
-  const client = {
-    member: { findFirst: vi.fn() },
-    signedDocument: { updateMany: vi.fn() },
-  };
-
-  return { auth, client, __mocks: { getSession, getActiveMember } };
-});
-
+import { mockPrismaClient, resetAllMocks, mockGetSession, mockGetActiveMember } from "./setup.js";
 import { revokeDocument } from "../src/controllers/documentController.js";
 import app from "../src/index.js";
-import { client, __mocks as authMocks } from "../src/lib/auth.js";
 
 function makeRes() {
   const res: any = {};
@@ -27,10 +12,7 @@ function makeRes() {
 }
 
 beforeEach(() => {
-  authMocks.getSession.mockReset();
-  authMocks.getActiveMember.mockReset();
-  (client.member.findFirst as any).mockReset();
-  (client.signedDocument.updateMany as any).mockReset();
+  resetAllMocks();
 });
 
 describe("revokeDocument controller (unit)", () => {
@@ -72,7 +54,7 @@ describe("revokeDocument controller (unit)", () => {
       user: { id: "u1" },
       session: { activeOrganizationId: "org1" },
     };
-    (client.member.findFirst as any).mockResolvedValue({ role: "member" });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "member" });
     const res = makeRes();
 
     await revokeDocument(req, res as any);
@@ -86,8 +68,8 @@ describe("revokeDocument controller (unit)", () => {
       user: { id: "u1" },
       session: { activeOrganizationId: "org1" },
     };
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.signedDocument.updateMany as any).mockResolvedValue({ count: 0 });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.signedDocument.updateMany.mockResolvedValue({ count: 0 });
     const res = makeRes();
 
     await revokeDocument(req, res as any);
@@ -104,8 +86,8 @@ describe("revokeDocument controller (unit)", () => {
       user: { id: "u1" },
       session: { activeOrganizationId: "org1" },
     };
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.signedDocument.updateMany as any).mockResolvedValue({ count: 1 });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.signedDocument.updateMany.mockResolvedValue({ count: 1 });
     const res = makeRes();
 
     await revokeDocument(req, res as any);
@@ -120,7 +102,7 @@ describe("revokeDocument controller (unit)", () => {
 
 describe("revokeDocument endpoint (integration)", () => {
   it("POST /api/documents/revoke -> 401 when unauthenticated", async () => {
-    authMocks.getSession.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue(null);
 
     const res = await request(app)
       .post("/api/documents/revoke")
@@ -129,11 +111,11 @@ describe("revokeDocument endpoint (integration)", () => {
   });
 
   it("POST /api/documents/revoke -> 403 when not owner/admin", async () => {
-    authMocks.getSession.mockResolvedValue({
+    mockGetSession.mockResolvedValue({
       user: { id: "u1" },
       session: { id: "s1", activeOrganizationId: "org1" },
     });
-    (client.member.findFirst as any).mockResolvedValue({ role: "member" });
+    mockGetActiveMember.mockResolvedValue({ role: "member" });
 
     const res = await request(app)
       .post("/api/documents/revoke")
@@ -142,12 +124,13 @@ describe("revokeDocument endpoint (integration)", () => {
   });
 
   it("POST /api/documents/revoke -> 200 on success", async () => {
-    authMocks.getSession.mockResolvedValue({
+    mockGetSession.mockResolvedValue({
       user: { id: "u1" },
       session: { id: "s1", activeOrganizationId: "org1" },
     });
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.signedDocument.updateMany as any).mockResolvedValue({ count: 1 });
+    mockGetActiveMember.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.signedDocument.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await request(app)
       .post("/api/documents/revoke")

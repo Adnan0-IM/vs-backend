@@ -10,69 +10,28 @@ import {
 import { setupServer } from "msw/node";
 import { http } from "msw";
 import request from "supertest";
+import { mockPrismaClient, resetAllMocks, mockGetSession, mockGetActiveMember } from "./setup.js";
+import app from "../src/index.js";
+import { UTApi } from "uploadthing/server";
 
-// Mock auth and client similar to other tests
-vi.mock("../src/lib/auth.js", () => {
-  const getSession = vi.fn();
-  const getActiveMember = vi.fn();
-  const auth = { api: { getSession, getActiveMember } };
-
-  const client = {
-    member: { findFirst: vi.fn() },
-    organization: { findUnique: vi.fn() },
-    signedDocument: { create: vi.fn() },
-    verificationLog: { create: vi.fn() },
-  };
-
-  return { auth, client, __mocks: { getSession, getActiveMember } };
-});
-
+// Mock crypto service for controller tests
 vi.mock("../src/services/cryptoService.js", () => ({
   hashDocument: vi.fn(() => "test-hash"),
   signHash: vi.fn(() => "sig-base64"),
   decryptPrivateKey: vi.fn(
     () => "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
   ),
+  verifySignature: vi.fn(() => true),
 }));
-
-// Mock pdf-lib to avoid parsing a real PDF in tests
-vi.mock("pdf-lib", async () => ({
-  PDFDocument: {
-    load: vi.fn(async (_buf: Uint8Array) => ({
-      getPages: () => [
-        { getSize: () => ({ width: 200, height: 300 }), drawImage: vi.fn() },
-      ],
-      embedPng: async () => ({}),
-      save: async () => new Uint8Array(Buffer.from("fake-pdf")),
-    })),
-  },
-}));
-
-// Ensure uploadthing UTApi returns a success by default
-vi.mock("uploadthing/server", () => {
-  class MockUTApi {
-    static uploadResponse: any = [
-      { data: { ufsUrl: "https://cdn.example/signed.pdf" } },
-    ];
-    static deleteResponse: any = true;
-    uploadFiles() {
-      return Promise.resolve((MockUTApi as any).uploadResponse);
-    }
-    deleteFiles() {
-      return Promise.resolve((MockUTApi as any).deleteResponse);
-    }
-  }
-  return { UTApi: MockUTApi };
-});
-
-import app from "../src/index.js";
-import { client, __mocks as authMocks } from "../src/lib/auth.js";
 
 const server = setupServer();
 
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterAll(() => server.close());
-beforeEach(() => server.resetHandlers());
+beforeEach(() => {
+  server.resetHandlers();
+  resetAllMocks();
+});
 
 describe("MSW integration: external file download", () => {
   it("returns 201 when external file download succeeds (MSW mock)", async () => {
@@ -87,16 +46,21 @@ describe("MSW integration: external file download", () => {
     );
 
     // Auth and DB mocks
-    authMocks.getSession.mockResolvedValue({
+    mockGetSession.mockResolvedValue({
       user: { id: "u1" },
       session: { id: "s1", activeOrganizationId: "org1" },
     });
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.organization.findUnique as any).mockResolvedValue({
+    mockGetActiveMember.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.organization.findUnique.mockResolvedValue({
       publicKey: "pub",
       privateKeyEncrypted: "enc",
     });
-    (client.signedDocument.create as any).mockResolvedValue({ id: "doc1" });
+    mockPrismaClient.signedDocument.create.mockResolvedValue({ id: "doc1" });
+
+    (UTApi as any).uploadResponse = [
+      { data: { ufsUrl: "https://cdn.example/signed.pdf" } },
+    ];
 
     const res = await request(app)
       .post("/api/documents/upload-and-sign")
@@ -119,12 +83,13 @@ describe("MSW integration: external file download", () => {
       }),
     );
 
-    authMocks.getSession.mockResolvedValue({
+    mockGetSession.mockResolvedValue({
       user: { id: "u1" },
       session: { id: "s1", activeOrganizationId: "org1" },
     });
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.organization.findUnique as any).mockResolvedValue({
+    mockGetActiveMember.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.organization.findUnique.mockResolvedValue({
       publicKey: "pub",
       privateKeyEncrypted: "enc",
     });

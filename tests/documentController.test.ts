@@ -1,22 +1,9 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { mockPrismaClient, resetAllMocks } from "./setup.js";
+import { uploadAndSign } from "../src/controllers/documentController.js";
+import { UTApi } from "uploadthing/server";
 
-// Mock external dependencies used by the controller
-vi.mock("../src/lib/auth.js", () => {
-  const mock = {
-    member: { findFirst: vi.fn() },
-    organization: { findUnique: vi.fn() },
-    signedDocument: {
-      create: vi.fn(),
-      findUnique: vi.fn(),
-      findFirst: vi.fn(),
-      updateMany: vi.fn(),
-      findMany: vi.fn(),
-    },
-    verificationLog: { create: vi.fn(), findMany: vi.fn(), count: vi.fn() },
-  };
-  return { client: mock };
-});
-
+// Mock crypto service for controller tests
 vi.mock("../src/services/cryptoService.js", () => ({
   hashDocument: vi.fn(() => "test-hash"),
   signHash: vi.fn(() => "sig-base64"),
@@ -26,52 +13,6 @@ vi.mock("../src/services/cryptoService.js", () => ({
   verifySignature: vi.fn(() => true),
 }));
 
-vi.mock("qrcode", () => ({
-  default: {
-    toBuffer: vi.fn(async () => Buffer.from([0x89, 0x50, 0x4e, 0x47])),
-  },
-}));
-
-// Minimal pdf-lib mock that supports the used APIs
-vi.mock("pdf-lib", async () => {
-  return {
-    PDFDocument: {
-      load: vi.fn(async (_buf: Uint8Array) => {
-        return {
-          getPages: () => [
-            {
-              getSize: () => ({ width: 200, height: 300 }),
-              drawImage: vi.fn(),
-            },
-          ],
-          embedPng: async (_buf: Uint8Array) => ({
-            /* image placeholder */
-          }),
-          save: async () => new Uint8Array(Buffer.from("fake-pdf-bytes")),
-        };
-      }),
-    },
-  };
-});
-
-vi.mock("uploadthing/server", () => {
-  class MockUTApi {
-    static uploadResponse: any = [];
-    static deleteResponse: any = true;
-    uploadFiles() {
-      return Promise.resolve((MockUTApi as any).uploadResponse);
-    }
-    deleteFiles() {
-      return Promise.resolve((MockUTApi as any).deleteResponse);
-    }
-  }
-  return { UTApi: MockUTApi };
-});
-
-import { uploadAndSign } from "../src/controllers/documentController.js";
-import { client } from "../src/lib/auth.js";
-import { UTApi } from "uploadthing/server";
-
 function makeRes() {
   const res: any = {};
   res.status = vi.fn(() => res);
@@ -80,10 +21,7 @@ function makeRes() {
 }
 
 beforeEach(() => {
-  // Reset mocks
-  (client.member.findFirst as any).mockReset();
-  (client.organization.findUnique as any).mockReset();
-  (client.signedDocument.create as any).mockReset();
+  resetAllMocks();
 });
 
 describe("uploadAndSign controller", () => {
@@ -152,7 +90,7 @@ describe("uploadAndSign controller", () => {
       user: { id: "u1" },
       session: { activeOrganizationId: "org1" },
     };
-    (client.member.findFirst as any).mockResolvedValue(null);
+    mockPrismaClient.member.findFirst.mockResolvedValue(null);
     const res = makeRes();
 
     await uploadAndSign(req, res as any);
@@ -175,7 +113,7 @@ describe("uploadAndSign controller", () => {
       user: { id: "u1" },
       session: { activeOrganizationId: "org1" },
     };
-    (client.member.findFirst as any).mockResolvedValue({ role: "member" });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "member" });
     const res = makeRes();
 
     await uploadAndSign(req, res as any);
@@ -198,8 +136,8 @@ describe("uploadAndSign controller", () => {
       user: { id: "u1" },
       session: { activeOrganizationId: "org1" },
     };
-    (client.member.findFirst as any).mockResolvedValue({ role: "signer" });
-    (client.organization.findUnique as any).mockResolvedValue({});
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "signer" });
+    mockPrismaClient.organization.findUnique.mockResolvedValue({});
     const res = makeRes();
 
     await uploadAndSign(req, res as any);
@@ -212,10 +150,9 @@ describe("uploadAndSign controller", () => {
   });
 
   it("returns 400 when fetch of file fails", async () => {
-    // mock fetch to fail
     const mockFetch = vi.fn(async () => ({ ok: false }) as any) as unknown as typeof fetch;
     mockFetch.preconnect = vi.fn();
-    globalThis.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     const req: any = {
       body: {
@@ -228,8 +165,8 @@ describe("uploadAndSign controller", () => {
       user: { id: "u1" },
       session: { activeOrganizationId: "org1" },
     };
-    (client.member.findFirst as any).mockResolvedValue({ role: "signer" });
-    (client.organization.findUnique as any).mockResolvedValue({
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "signer" });
+    mockPrismaClient.organization.findUnique.mockResolvedValue({
       publicKey: "pub",
       privateKeyEncrypted: "enc",
     });
@@ -244,27 +181,25 @@ describe("uploadAndSign controller", () => {
   });
 
   it("successfully signs and uploads document", async () => {
-    // mock fetch to return ok and an ArrayBuffer
     const mockFetch = vi.fn(
       async () =>
         ({ ok: true, arrayBuffer: async () => Buffer.from("pdf-data") }) as any,
     ) as unknown as typeof fetch;
     mockFetch.preconnect = vi.fn();
-    globalThis.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.organization.findUnique as any).mockResolvedValue({
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.organization.findUnique.mockResolvedValue({
       publicKey: "pub",
       privateKeyEncrypted: "enc",
     });
 
-    // Ensure the controller's module-level utapi instance uses these mocked methods
     (UTApi as any).uploadResponse = [
       { data: { ufsUrl: "https://cdn.example/signed.pdf" } },
     ];
     (UTApi as any).deleteResponse = true;
 
-    (client.signedDocument.create as any).mockResolvedValue({
+    mockPrismaClient.signedDocument.create.mockResolvedValue({
       id: "doc1",
       title: "t",
     });

@@ -1,30 +1,16 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { mockPrismaClient, resetAllMocks } from "./setup.js";
+import {
+  generateKeys,
+  getDashboardStats,
+} from "../src/controllers/organizationController.js";
 
-vi.mock("../src/lib/auth.js", () => {
-  const getSession = vi.fn();
-  const getActiveMember = vi.fn();
-  const auth = { api: { getSession, getActiveMember } };
-
-  const client = {
-    member: { findFirst: vi.fn() },
-    organization: { update: vi.fn(), findUnique: vi.fn() },
-    signedDocument: { count: vi.fn(), findMany: vi.fn() },
-    verificationLog: { count: vi.fn(), findMany: vi.fn() },
-  };
-
-  return { auth, client, __mocks: { getSession, getActiveMember } };
-});
-
+// Mock crypto service for controller tests
 vi.mock("../src/services/cryptoService.js", () => ({
   generateKeyPair: vi.fn(() => ({ publicKey: "pub", privateKey: "priv" })),
   encryptPrivateKey: vi.fn((pk: string) => "enc:" + pk.slice(0, 10)),
 }));
 
-import {
-  generateKeys,
-  getDashboardStats,
-} from "../src/controllers/organizationController.js";
-import { client, __mocks as authMocks } from "../src/lib/auth.js";
 import {
   generateKeyPair,
   encryptPrivateKey,
@@ -38,17 +24,7 @@ function makeRes() {
 }
 
 beforeEach(() => {
-  authMocks.getSession.mockReset();
-  authMocks.getActiveMember.mockReset();
-  (client.member.findFirst as any).mockReset();
-  (client.organization.update as any).mockReset();
-  (client.organization.findUnique as any).mockReset();
-  (client.signedDocument.count as any).mockReset();
-  (client.verificationLog.count as any).mockReset();
-  (client.signedDocument.findMany as any).mockReset();
-  (client.verificationLog.findMany as any).mockReset();
-  (generateKeyPair as any).mockClear();
-  (encryptPrivateKey as any).mockClear();
+  resetAllMocks();
 });
 
 describe("organizationController.generateKeys", () => {
@@ -68,7 +44,7 @@ describe("organizationController.generateKeys", () => {
 
   it("returns 403 when not a member", async () => {
     const req: any = { body: { orgId: "org1" }, user: { id: "u1" } };
-    (client.member.findFirst as any).mockResolvedValue(null);
+    mockPrismaClient.member.findFirst.mockResolvedValue(null);
     const res = makeRes();
     await generateKeys(req, res as any);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -76,7 +52,7 @@ describe("organizationController.generateKeys", () => {
 
   it("returns 403 when member is not owner/admin", async () => {
     const req: any = { body: { orgId: "org1" }, user: { id: "u1" } };
-    (client.member.findFirst as any).mockResolvedValue({ role: "member" });
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "member" });
     const res = makeRes();
     await generateKeys(req, res as any);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -84,8 +60,8 @@ describe("organizationController.generateKeys", () => {
 
   it("generates keys and updates organization on success", async () => {
     const req: any = { body: { orgId: "org1" }, user: { id: "u1" } };
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.organization.update as any).mockResolvedValue({
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.organization.update.mockResolvedValue({
       id: "org1",
       name: "Org",
       slug: "org",
@@ -100,7 +76,7 @@ describe("organizationController.generateKeys", () => {
 
     expect(generateKeyPair).toHaveBeenCalled();
     expect(encryptPrivateKey).toHaveBeenCalled();
-    expect(client.organization.update).toHaveBeenCalledWith({
+    expect(mockPrismaClient.organization.update).toHaveBeenCalledWith({
       where: { id: "org1" },
       data: { publicKey: "pub", privateKeyEncrypted: expect.any(String) },
     });
@@ -128,7 +104,7 @@ describe("organizationController.getDashboardStats", () => {
 
   it("returns 403 when not a member", async () => {
     const req: any = { query: { orgId: "org1" }, user: { id: "u1" } };
-    (client.member.findFirst as any).mockResolvedValue(null);
+    mockPrismaClient.member.findFirst.mockResolvedValue(null);
     const res = makeRes();
     await getDashboardStats(req, res as any);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -136,8 +112,8 @@ describe("organizationController.getDashboardStats", () => {
 
   it("returns 404 when organization not found", async () => {
     const req: any = { query: { orgId: "org1" }, user: { id: "u1" } };
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.organization.findUnique as any).mockResolvedValue(null);
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.organization.findUnique.mockResolvedValue(null);
     const res = makeRes();
     await getDashboardStats(req, res as any);
     expect(res.status).toHaveBeenCalledWith(404);
@@ -145,8 +121,8 @@ describe("organizationController.getDashboardStats", () => {
 
   it("returns dashboard stats on success", async () => {
     const req: any = { query: { orgId: "org1" }, user: { id: "u1" } };
-    (client.member.findFirst as any).mockResolvedValue({ role: "owner" });
-    (client.organization.findUnique as any).mockResolvedValue({
+    mockPrismaClient.member.findFirst.mockResolvedValue({ role: "owner" });
+    mockPrismaClient.organization.findUnique.mockResolvedValue({
       id: "org1",
       name: "Org",
       slug: "org",
@@ -156,7 +132,7 @@ describe("organizationController.getDashboardStats", () => {
       createdAt: new Date(),
     });
 
-    (client.signedDocument.count as any).mockImplementation(
+    mockPrismaClient.signedDocument.count.mockImplementation(
       ({ where }: any) => {
         if (where && where.status === "ACTIVE") return Promise.resolve(2);
         if (where && where.status === "REVOKED") return Promise.resolve(1);
@@ -164,7 +140,7 @@ describe("organizationController.getDashboardStats", () => {
       },
     );
 
-    (client.verificationLog.count as any).mockImplementation(
+    mockPrismaClient.verificationLog.count.mockImplementation(
       ({ where }: any) => {
         if (
           where &&
@@ -177,7 +153,7 @@ describe("organizationController.getDashboardStats", () => {
       },
     );
 
-    (client.signedDocument.findMany as any).mockResolvedValue([
+    mockPrismaClient.signedDocument.findMany.mockResolvedValue([
       {
         id: "d1",
         title: "T1",
@@ -190,7 +166,7 @@ describe("organizationController.getDashboardStats", () => {
       },
     ]);
 
-    (client.verificationLog.findMany as any).mockResolvedValue([]);
+    mockPrismaClient.verificationLog.findMany.mockResolvedValue([]);
 
     const res = makeRes();
     await getDashboardStats(req, res as any);
