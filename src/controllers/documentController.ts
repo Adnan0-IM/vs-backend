@@ -8,12 +8,14 @@ import {
   verifySignature,
   decryptPrivateKey,
 } from "../services/cryptoService.js";
+import {
+  computeTLSH,
+  compareTLSH,
+} from "../services/tlshService.js";
 import crypto from "crypto";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import { UTApi } from "uploadthing/server";
-// @ts-ignore - tlsh has no types
-import tlsh from "tlsh";
 
 const utapi = new UTApi();
 
@@ -156,7 +158,7 @@ export async function uploadAndSign(req: Request, res: Response) {
     // Generate TLSH fuzzy hash for modified version detection
     let fuzzyHash: string | null = null;
     try {
-      fuzzyHash = tlsh.hash(modifiedPdfBuffer);
+      fuzzyHash = computeTLSH(modifiedPdfBuffer);
     } catch (err) {
       console.warn("Failed to compute TLSH fuzzy hash:", err);
     }
@@ -529,7 +531,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     // Compute fuzzy hash for modified version detection
     let uploadedFuzzyHash: string | null = null;
     try {
-      uploadedFuzzyHash = tlsh.hash(fileBuffer);
+      uploadedFuzzyHash = computeTLSH(fileBuffer);
     } catch (err) {
       console.warn("Failed to compute TLSH fuzzy hash for uploaded file:", err);
     }
@@ -577,7 +579,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
         for (const candidate of candidates) {
           if (candidate.fuzzyHash) {
             try {
-              const similarity = tlsh.compare(
+              const similarity = compareTLSH(
                 uploadedFuzzyHash,
                 candidate.fuzzyHash,
               );
@@ -600,6 +602,8 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
         } else {
           resultStatus = "NO_MATCHING_RECORD";
         }
+      } else {
+        resultStatus = "NO_MATCHING_RECORD";
       }
     }
 
