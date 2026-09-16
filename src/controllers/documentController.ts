@@ -1,3 +1,5 @@
+import { fromNodeHeaders } from "better-auth/node";
+import { auth } from "../lib/auth.js";
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import {
@@ -10,6 +12,8 @@ import crypto from "crypto";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import { UTApi } from "uploadthing/server";
+// @ts-ignore - tlsh has no types
+import tlsh from "tlsh";
 
 const utapi = new UTApi();
 
@@ -57,11 +61,9 @@ export async function uploadAndSign(req: Request, res: Response) {
     });
 
     if (!member) {
-      return res
-        .status(403)
-        .json({
-          error: "Forbidden: You are not a member of this organization",
-        });
+      return res.status(403).json({
+        error: "Forbidden: You are not a member of this organization",
+      });
     }
 
     if (
@@ -69,11 +71,9 @@ export async function uploadAndSign(req: Request, res: Response) {
       member.role !== "admin" &&
       member.role !== "signer"
     ) {
-      return res
-        .status(403)
-        .json({
-          error: "Forbidden: You do not have permissions to sign documents",
-        });
+      return res.status(403).json({
+        error: "Forbidden: You do not have permissions to sign documents",
+      });
     }
 
     // Fetch organization keys
@@ -153,6 +153,14 @@ export async function uploadAndSign(req: Request, res: Response) {
     // Generate SHA-256 hash of the QR-embedded PDF
     const documentHash = hashDocument(modifiedPdfBuffer);
 
+    // Generate TLSH fuzzy hash for modified version detection
+    let fuzzyHash: string | null = null;
+    try {
+      fuzzyHash = tlsh.hash(modifiedPdfBuffer);
+    } catch (err) {
+      console.warn("Failed to compute TLSH fuzzy hash:", err);
+    }
+
     // Decrypt organization private key
     let privateKeyPem: string;
     try {
@@ -207,6 +215,7 @@ export async function uploadAndSign(req: Request, res: Response) {
         mimeType,
         fileSize: finalFileSize,
         documentHash,
+        fuzzyHash,
         digitalSignature,
         verificationToken,
         organizationId: orgId,
@@ -330,11 +339,9 @@ export async function revokeDocument(req: Request, res: Response) {
     });
 
     if (!member || (member.role !== "owner" && member.role !== "admin")) {
-      return res
-        .status(403)
-        .json({
-          error: "Forbidden: Only owners and admins can revoke documents",
-        });
+      return res.status(403).json({
+        error: "Forbidden: Only owners and admins can revoke documents",
+      });
     }
 
     // Update document status
@@ -519,8 +526,16 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
 
     const fileHash = hashDocument(fileBuffer);
 
-    // Look up signed document by hash
-    const document = await prisma.signedDocument.findFirst({
+    // Compute fuzzy hash for modified version detection
+    let uploadedFuzzyHash: string | null = null;
+    try {
+      uploadedFuzzyHash = tlsh.hash(fileBuffer);
+    } catch (err) {
+      console.warn("Failed to compute TLSH fuzzy hash for uploaded file:", err);
+    }
+
+    // Look up signed document by exact hash
+    let document = await prisma.signedDocument.findFirst({
       where: { documentHash: fileHash },
       include: {
         organization: {
@@ -533,17 +548,63 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
       },
     });
 
-    let resultStatus: "VERIFIED" | "TAMPERED_SIGNATURE" | "NO_MATCHING_RECORD";
+    let resultStatus:
+      | "VERIFIED"
+      | "TAMPERED_SIGNATURE"
+      | "NO_MATCHING_RECORD"
+      | "MODIFIED_VERSION";
     let verified = false;
     let matchedDocument = document;
 
     if (!document) {
-      // No document with this exact hash exists.
-      // The file was either never signed or has been modified (even by 1 byte).
-      // SHA-256 is deterministic - any change produces a completely different hash.
-      resultStatus = "NO_MATCHING_RECORD";
-    } else {
-      // Verify digital signature
+      // No exact hash match - try fuzzy matching if we have a fuzzy hash
+      if (uploadedFuzzyHash) {
+        const candidates = await prisma.signedDocument.findMany({
+          where: { fuzzyHash: { not: null } },
+          include: {
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                publicKey: true,
+              },
+            },
+          },
+        });
+
+        // Find best fuzzy match
+        let bestMatch: { document: any; similarity: number } | null = null;
+        for (const candidate of candidates) {
+          if (candidate.fuzzyHash) {
+            try {
+              const similarity = tlsh.compare(
+                uploadedFuzzyHash,
+                candidate.fuzzyHash,
+              );
+              if (
+                similarity > 80 &&
+                (!bestMatch || similarity > bestMatch.similarity)
+              ) {
+                bestMatch = { document: candidate, similarity };
+              }
+            } catch (err) {
+              console.warn("TLSH compare failed:", err);
+            }
+          }
+        }
+
+        if (bestMatch) {
+          document = bestMatch.document;
+          matchedDocument = document;
+          resultStatus = "MODIFIED_VERSION";
+        } else {
+          resultStatus = "NO_MATCHING_RECORD";
+        }
+      }
+    }
+
+    if (document && resultStatus !== "MODIFIED_VERSION") {
+      // Verify digital signature for exact match
       let signatureValid = false;
       if (document.organization.publicKey) {
         try {
@@ -665,8 +726,6 @@ export async function getVerificationLogs(req: Request, res: Response) {
 }
 
 // Helper to fetch session for optional verification logs tracking
-import { fromNodeHeaders } from "better-auth/node";
-import { auth } from "../lib/auth.js";
 async function authClientSession(req: Request) {
   try {
     const session = await auth.api.getSession({

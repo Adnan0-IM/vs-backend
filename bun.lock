@@ -13,6 +13,7 @@
         "pdf-lib": "^1.17.1",
         "qrcode": "^1.5.3",
         "resend": "^6.20.0",
+        "tlsh": "^1.0.8",
         "tslib": "^2.8.1",
         "uploadthing": "^7.7.4",
       },
@@ -746,6 +747,8 @@
     "tldts": ["tldts@7.4.10", "", { "dependencies": { "tldts-core": "^7.4.10" }, "bin": { "tldts": "bin/cli.js" } }, "sha512-GgouD1B+sWwvkaEq8vXC15DjQitxbvs12oIXELpconwm+Tg3zfcEv4jgzq3vtKverDXsg3VI8aRgNL2Nra0Iog=="],
 
     "tldts-core": ["tldts-core@7.4.10", "", {}, "sha512-KnQjp53ZekKgm/r3l+u8kJGGzYgrWdP8+Mql7a4vijh2WE0IrZWspQj/TpTxDho/YxO+AnOZnIjQcCD+q6iJsw=="],
+
+    "tlsh": ["tlsh@1.0.8", "", {}, "sha512-Ke+nJIOo1bG6TKDiTRmVBLHARad+p7bSPdNpErx6XhmQRa2M4ry1VDJbID6OeXQn2YnN7hWBmAFbdtUFywNMmQ=="],
 
     "toidentifier": ["toidentifier@1.0.1", "", {}, "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="],
 

@@ -161,6 +161,9 @@ model SignedDocument {
   // SHA-256 hash
   documentHash String
 
+  // TLSH fuzzy hash for modified version detection
+  fuzzyHash String?
+
   // RSA digital signature
   digitalSignature String
 
@@ -230,6 +233,7 @@ enum VerificationResult {
   NO_MATCHING_RECORD
   STORAGE_ERROR
   NOT_FOUND
+  MODIFIED_VERSION
 }
 
 enum MemberRole {
