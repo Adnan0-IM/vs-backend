@@ -16,16 +16,25 @@ import crypto from "crypto";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import { UTApi } from "uploadthing/server";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+import PDFParser from "pdf2json";
 
 const utapi = new UTApi();
 
 // Helper to extract text from PDF buffer
 async function extractText(buffer: Buffer): Promise<string> {
-  const data = await pdfParse(buffer);
-  return data.text.replace(/\s+/g, ' ').trim(); // normalize whitespace
+  return new Promise((resolve, reject) => {
+    const pdfParser = new PDFParser();
+
+    pdfParser.on("pdfParser_dataError", (errData) => reject(errData.parserError));
+    pdfParser.on("pdfParser_dataReady", (pdfData) => {
+      const text = pdfData.Pages.map(page =>
+        page.Texts.map(text => decodeURIComponent(text.R[0].T)).join(" ")
+      ).join(" ");
+      resolve(text.replace(/\s+/g, ' ').trim());
+    });
+
+    pdfParser.parseBuffer(buffer);
+  });
 }
 
 // Helper to fetch file content as Buffer
