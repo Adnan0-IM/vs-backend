@@ -583,6 +583,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
                 uploadedFuzzyHash,
                 candidate.fuzzyHash,
               );
+              console.log(`TLSH Diff for candidate ${candidate.id}: ${diff}`);
               // TLSH distance: small is good.
               if (
                 diff < 80 &&
