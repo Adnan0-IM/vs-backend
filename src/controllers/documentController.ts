@@ -16,8 +16,16 @@ import crypto from "crypto";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import { UTApi } from "uploadthing/server";
+// @ts-ignore
+import pdfParse from "pdf-parse";
 
 const utapi = new UTApi();
+
+// Helper to extract text from PDF buffer
+async function extractText(buffer: Buffer): Promise<string> {
+  const data = await pdfParse(buffer);
+  return data.text.replace(/\s+/g, ' ').trim(); // normalize whitespace
+}
 
 // Helper to fetch file content as Buffer
 async function fetchFileBuffer(url: string): Promise<Buffer> {
@@ -559,7 +567,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
     let matchedDocument = document;
 
     if (!document) {
-      // No exact hash match - try fuzzy matching if we have a fuzzy hash
+      // No exact hash match - try fuzzy matching and text extraction
       if (uploadedFuzzyHash) {
         const candidates = await prisma.signedDocument.findMany({
           where: { fuzzyHash: { not: null } },
@@ -574,22 +582,15 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
           },
         });
 
-        // Find best fuzzy match
-        let bestMatch: { document: any; diff: number } | null = null;
+        // Step 1: Pre-filter using TLSH (broad match)
+        const possibleMatches = [];
         for (const candidate of candidates) {
           if (candidate.fuzzyHash) {
             try {
-              const diff = compareTLSH(
-                uploadedFuzzyHash,
-                candidate.fuzzyHash,
-              );
-              console.log(`TLSH Diff for candidate ${candidate.id}: ${diff}`);
-              // TLSH distance: small is good.
-              if (
-                diff < 80 &&
-                (!bestMatch || diff < bestMatch.diff)
-              ) {
-                bestMatch = { document: candidate, diff };
+              const diff = compareTLSH(uploadedFuzzyHash, candidate.fuzzyHash);
+              // Broad threshold for TLSH (e.g., 300) to find potential modified versions
+              if (diff < 300) {
+                possibleMatches.push({ document: candidate, diff });
               }
             } catch (err) {
               console.warn("TLSH compare failed:", err);
@@ -597,11 +598,35 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
           }
         }
 
-        if (bestMatch) {
-          document = bestMatch.document;
-          matchedDocument = document;
-          resultStatus = "MODIFIED_VERSION";
-        } else {
+        // Step 2: Refine using text extraction on potential matches
+        if (possibleMatches.length > 0) {
+          try {
+            const uploadedText = await extractText(fileBuffer);
+            const uploadedTextHash = crypto.createHash('sha256').update(uploadedText).digest('hex');
+
+            for (const match of possibleMatches) {
+              try {
+                const originalBuffer = await fetchFileBuffer(match.document.fileUrl);
+                const originalText = await extractText(originalBuffer);
+                const originalTextHash = crypto.createHash('sha256').update(originalText).digest('hex');
+
+                if (uploadedTextHash === originalTextHash) {
+                  document = match.document;
+                  matchedDocument = document;
+                  resultStatus = "MODIFIED_VERSION";
+                  console.log(`Text-based match found for document: ${document.id}`);
+                  break;
+                }
+              } catch (err) {
+                console.warn(`Failed to verify text for candidate ${match.document.id}:`, err);
+              }
+            }
+          } catch (err) {
+            console.error("Text extraction failed during verification:", err);
+          }
+        }
+
+        if (!document) {
           resultStatus = "NO_MATCHING_RECORD";
         }
       } else {
