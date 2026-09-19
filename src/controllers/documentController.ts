@@ -585,7 +585,7 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
               );
               // TLSH distance: small is good.
               if (
-                diff < 60 &&
+                diff < 80 &&
                 (!bestMatch || diff < bestMatch.diff)
               ) {
                 bestMatch = { document: candidate, diff };
