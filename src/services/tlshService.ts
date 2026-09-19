@@ -23,11 +23,9 @@ export function compareTLSH(hash1: string, hash2: string): number {
     const t2 = new TLSH();
     t2.fromTlshStr(hash2);
 
-    const diff = t1.totalDiff(t2);
-    const similarity = Math.max(0, 100 - diff);
-    return similarity;
+    return t1.totalDiff(t2);
   } catch (err) {
     console.warn("Failed to compare TLSH:", err);
-    return 0;
+    return 10000;
   }
 }

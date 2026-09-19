@@ -575,19 +575,20 @@ export async function verifyDocumentByFile(req: Request, res: Response) {
         });
 
         // Find best fuzzy match
-        let bestMatch: { document: any; similarity: number } | null = null;
+        let bestMatch: { document: any; diff: number } | null = null;
         for (const candidate of candidates) {
           if (candidate.fuzzyHash) {
             try {
-              const similarity = compareTLSH(
+              const diff = compareTLSH(
                 uploadedFuzzyHash,
                 candidate.fuzzyHash,
               );
+              // TLSH distance: small is good.
               if (
-                similarity > 80 &&
-                (!bestMatch || similarity > bestMatch.similarity)
+                diff < 20 &&
+                (!bestMatch || diff < bestMatch.diff)
               ) {
-                bestMatch = { document: candidate, similarity };
+                bestMatch = { document: candidate, diff };
               }
             } catch (err) {
               console.warn("TLSH compare failed:", err);
