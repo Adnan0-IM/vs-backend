@@ -16,8 +16,9 @@ import crypto from "crypto";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import { UTApi } from "uploadthing/server";
-// @ts-ignore
-import pdfParse from "pdf-parse";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 const utapi = new UTApi();
 
