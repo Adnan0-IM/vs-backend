@@ -25,7 +25,13 @@ async function extractText(buffer: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser();
 
-    pdfParser.on("pdfParser_dataError", (errData) => reject(errData.parserError));
+    pdfParser.on("pdfParser_dataError", (errData) => {
+      if ('parserError' in errData) {
+        reject(errData.parserError);
+      } else {
+        reject(errData);
+      }
+    });
     pdfParser.on("pdfParser_dataReady", (pdfData) => {
       const text = pdfData.Pages.map(page =>
         page.Texts.map(text => decodeURIComponent(text.R[0].T)).join(" ")
