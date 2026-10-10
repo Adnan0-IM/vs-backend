@@ -42,7 +42,7 @@ export const auth = betterAuth({
     }),
   ],
   trustedOrigins: [
-    "https://vs.adnanilyas.dev",
+    "https://vs.adnanilyas.com",
     "http://localhost:3000",
     "http://localhost:5173",
   ],

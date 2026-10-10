@@ -29,7 +29,7 @@ const app = express();
 const corsOptions = {
   origin: [
     "http://localhost:5173",
-    "https://vs.adnanilyas.dev",
+    "https://vs.adnanilyas.com",
     "http://localhost:3000",
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
@@ -76,7 +76,7 @@ app.get("/", (_, res) => {
       <p>This is an API for issuing and verifying documents.</p>
       <p>
         A Final year Project by
-        <a href="https://adnanilyas.dev">Adnan Iliyasu</a>
+        <a href="https://adnanilyas.com">Adnan Iliyasu</a>
       </p>
       <div>
         <p>Hosted on</p>
