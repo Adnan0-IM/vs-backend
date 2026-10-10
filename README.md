@@ -108,7 +108,10 @@ Signed documents include:
 
 ## Notes
 
+Internet connectivity is required for the app to function, as it relies on uploadthing for file uploads and resend for email notifications. The app is designed to be used in a modern browser with JavaScript enabled.
+
 This repository is the backend API layer. It does not appear to include a frontend web app in the same workspace; instead, it is meant to power a client application that interacts with these endpoints.
+
 
 ## Intended use
 
