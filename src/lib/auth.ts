@@ -24,12 +24,6 @@ export const auth = betterAuth({
         try {
           console.log("SendInvitationEmail hook called for:", data.email);
 
-          // data.id = invitation ID
-          // data.email = recipient
-          // data.inviter.user = { name, email } of the person inviting
-          // data.organization = { name, id, slug }
-          // data.role = the role being invited to
-
           const inviteLink = await generateInvitationLink(data.id);
 
           await sendInvitationEmail(

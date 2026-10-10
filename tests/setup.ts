@@ -6,16 +6,13 @@ import { vi } from "vitest";
 process.env.BETTER_AUTH_SECRET =
   process.env.BETTER_AUTH_SECRET || "test-secret-for-crypto-service-setup";
 
-// Provide global fetch if not present (some tests may use fetch)
 if (typeof globalThis.fetch !== "function") {
-  // Use undici fetch if available, otherwise a noop that throws.
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { fetch } = await import("undici");
     // @ts-ignore
     globalThis.fetch = fetch;
   } catch (e) {
-    // leave fetch undefined; individual tests can mock it as needed
   }
 }
 
@@ -45,7 +42,6 @@ const createMockPrismaClient = () => ({
   },
 });
 
-// Create and export a mock that tests can import and customize
 export const mockPrismaClient = createMockPrismaClient();
 
 // Mock the prisma module globally
@@ -86,15 +82,6 @@ vi.mock("../src/lib/permissions.js", () => ({
   requireAdmin: vi.fn(),
 }));
 
-// Mock crypto service - tests that need real crypto should unmock or override
-// vi.mock("../src/services/cryptoService.js", () => ({
-//   hashDocument: vi.fn(() => "test-hash"),
-//   signHash: vi.fn(() => "sig-base64"),
-//   verifySignature: vi.fn(() => true),
-//   decryptPrivateKey: vi.fn(() => "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"),
-//   generateKeyPair: vi.fn(() => ({ publicKey: "pub", privateKey: "priv" })),
-//   encryptPrivateKey: vi.fn((pk: string) => "enc:" + pk.slice(0, 10)),
-// }));
 
 // Mock qrcode
 vi.mock("qrcode", () => ({

@@ -36,7 +36,6 @@ export function encryptPrivateKey(privateKeyPem: string): string {
   );
   let encrypted = cipher.update(privateKeyPem, "utf8", "hex");
   encrypted += cipher.final("hex");
-  // Store iv alongside encrypted data as iv:encryptedData
   return `${iv.toString("hex")}:${encrypted}`;
 }
 

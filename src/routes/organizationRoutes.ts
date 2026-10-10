@@ -7,8 +7,6 @@ import {
 
 export const organizationRouter = Router();
 
-// Route to generate RSA keys for organization
 organizationRouter.post("/generate-keys", requireAuth, generateKeys);
 
-// Route to get dashboard statistics
 organizationRouter.get("/dashboard-stats", requireAuth, getDashboardStats);

@@ -1,10 +1,8 @@
 import { Resend } from "resend";
 import dotenv from "dotenv";
 
-// Load environment variables from .env file
 dotenv.config();
 
-// Initialize Resend lazily to avoid crashing on missing API key during module load
 let resendInstance: Resend | null = null;
 
 function getResend(): Resend {
@@ -17,13 +15,7 @@ function getResend(): Resend {
   return resendInstance;
 }
 
-/**
- * Send an invitation email to a user
- * @param email - The recipient email address
- * @param orgName - The organization name
- * @param inviteLink - The invitation acceptance link
- * @param role - The role being offered
- */
+
 export async function sendInvitationEmail(
   email: string,
   orgName: string,
@@ -31,7 +23,6 @@ export async function sendInvitationEmail(
   role: string,
 ) {
   try {
-    // Create email content based on role
     const roleDescription = getRoleDescription(role);
 
     const resend = getResend();
@@ -75,9 +66,7 @@ export async function sendInvitationEmail(
   }
 }
 
-/**
- * Get a human-readable description for a role
- */
+
 function getRoleDescription(role: string): string {
   switch (role.toLowerCase()) {
     case "owner":
@@ -91,13 +80,10 @@ function getRoleDescription(role: string): string {
   }
 }
 
-/**
- * Generate an invitation link for a user
- */
+
 export async function generateInvitationLink(
   invitationId: string,
 ): Promise<string> {
-  // Get the base URL from environment or use a default
   const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 
   return `${baseUrl}/invitation/${invitationId}`;

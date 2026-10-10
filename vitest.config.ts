@@ -4,14 +4,13 @@ import { defineConfig } from "vitest/config";
 // https://vitest.dev/config/
 export default defineConfig({
   test: {
-    globals: true, // Enable global test variables like `describe`, `test`, `expect`
-    environment: "node", // Use Node.js environment
-    setupFiles: "./tests/setup.ts", // Setup file for global test configuration
+    globals: true, 
+    environment: "node", 
+    setupFiles: "./tests/setup.ts", 
     coverage: {
-      provider: "v8", // or 'istanbul'
+      provider: "v8", 
       reporter: ["text", "json", "html"],
     },
-    // Test file patterns
     include: ["**/*.test.ts"],
     exclude: ["node_modules", ".vercel", "dist"],
   },
