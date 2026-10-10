@@ -6,6 +6,12 @@ This repository contains the backend API for a document signing and verification
 
 Internet connectivity is required for the app to function, as it relies on uploadthing for file uploads and resend for email notifications. The app is designed to be used in a modern browser with JavaScript enabled.
 
+```bash
+docker compose up -d db
+```
+
+it will pull the postgres db image and start the container
+
 check `.env` and `.env.production` or simply visit to hosted site on https://vs.adnanilyas.dev or https://vs.adnanilyas.com
 
 ## Overview
