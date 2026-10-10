@@ -2,6 +2,12 @@
 
 This repository contains the backend API for a document signing and verification platform.
 
+## Note
+
+Internet connectivity is required for the app to function, as it relies on uploadthing for file uploads and resend for email notifications. The app is designed to be used in a modern browser with JavaScript enabled.
+
+check `.env` and `.env.production` or simply visit to hosted site on https://vs.adnanilyas.dev or https://vs.adnanilyas.com
+
 ## Overview
 
 This app is designed for organizations to issue signed documents, verify their authenticity, and track verification activity. It provides an API for authentication, organization management, document signing, QR-based verification, and audit logging.
@@ -107,8 +113,6 @@ Signed documents include:
 - signer and organization references
 
 ## Notes
-
-Internet connectivity is required for the app to function, as it relies on uploadthing for file uploads and resend for email notifications. The app is designed to be used in a modern browser with JavaScript enabled.
 
 This repository is the backend API layer. It does not appear to include a frontend web app in the same workspace; instead, it is meant to power a client application that interacts with these endpoints.
 
