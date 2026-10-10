@@ -1,132 +1,162 @@
-# Secure Document Verification system Using Digital Signatures and QR-Codes (Veridoc) Backend
+# VeriDoc backend
 
-This repository contains the backend API for a document signing and verification platform.
+This directory contains the Express API for VeriDoc, a document signing and
+verification platform. The API handles authentication, organizations,
+document signing, QR-code verification, file uploads, and verification logs.
 
-## Note
+## Run locally
 
-Internet connectivity is required for the app to function, as it relies on uploadthing for file uploads and resend for email notifications. The app is designed to be used in a modern browser with JavaScript enabled.
+The frontend and backend are separate applications. Start the backend first,
+then start the frontend in a second terminal.
+
+### Prerequisites
+
+- [Bun](https://bun.sh/) (the project uses Bun scripts and `bun.lock`)
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose, for local
+  PostgreSQL
+- A modern browser
+- Internet access for UploadThing file storage and Resend email delivery
+
+### 1. Install dependencies
+
+From this directory:
+
+```bash
+bun install
+```
+
+### 2. Start PostgreSQL
+
+The Compose file starts only the database; the API itself runs with Bun:
 
 ```bash
 docker compose up -d db
 ```
 
-it will pull the postgres db image and start the container
+PostgreSQL is exposed on `localhost:5432` with these local development
+credentials:
 
-check `.env` and `.env.production` or simply visit to hosted site on https://vs.adnanilyas.dev or https://vs.adnanilyas.com
+```text
+database: app
+user: postgres
+password: postgres
+```
 
-## Overview
+To stop the database later:
 
-This app is designed for organizations to issue signed documents, verify their authenticity, and track verification activity. It provides an API for authentication, organization management, document signing, QR-based verification, and audit logging.
+```bash
+docker compose down
+```
 
-The backend is built with:
-- Express
-- TypeScript
-- Prisma + PostgreSQL
-- Better Auth
-- UploadThing for file storage
-- RSA cryptography for document signing
-- QR code generation for verification links
+The database data is stored in the `db-data` Docker volume. Remove that volume
+only if you intentionally want to delete the local database.
 
-## Main functionality
+### 3. Configure environment variables
 
-### 1. Authentication and organization management
-The backend supports user authentication and organization-aware access control. Users can belong to organizations and have roles such as:
-- owner
-- admin
-- member
+Create `vs-backend/.env` and set these values. Do not commit `.env` or share
+real credentials.
 
-Organizations can also generate RSA key pairs used for signing documents.
+```dotenv
+BETTER_AUTH_SECRET=replace-with-a-long-random-secret
+BETTER_AUTH_URL=http://localhost:3000
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app?schema=public
+UPLOADTHING_TOKEN=your-uploadthing-token
+RESEND_API_KEY=your-resend-api-key
+EMAIL_FROM=invitations@example.com
+FRONTEND_URL=http://localhost:5173
+```
 
-### 2. Document signing
-Authenticated organization members can upload a document, then the backend:
-- downloads the original file
-- embeds a QR code that links to a verification page
-- hashes the signed PDF content
-- decrypts the organization’s private key
-- signs the hash using RSA
-- uploads the signed version back to storage
-- saves the metadata and signature in the database
+`UPLOADTHING_TOKEN` is required for document uploads. `RESEND_API_KEY` and
+`EMAIL_FROM` are required for invitation emails. For a local-only setup, use
+the hosted service credentials from your team rather than committing
+credentials to the repository.
 
-This creates a verifiable document record tied to the issuing organization.
+### 4. Apply the database migrations
 
-### 3. Verification by QR code or uploaded file
-Anyone can verify a signed document through the API:
-- by scanning a verification token in the QR code
-- or by uploading a file to compare against known signed documents
+Run this after PostgreSQL is available and whenever a new migration is added:
 
-The verification flow checks:
-- whether the file hash matches the original signed document
-- whether the digital signature is valid using the organization public key
-- whether the document has been revoked or is otherwise invalid
+```bash
+bunx prisma migrate deploy
+```
 
-### 4. Verification logging and dashboard data
-The app records verification attempts and supports organization dashboard stats such as:
-- total documents
-- active documents
-- revoked documents
-- total verifications
-- verification success rate
-- recent document activity
-- recent verification logs
+### 5. Start the API
+
+```bash
+bun run dev
+```
+
+The API listens on [http://localhost:3000](http://localhost:3000). Check that
+it is running with:
+
+```bash
+curl http://localhost:3000/healthz
+```
+
+The expected response contains `"status":"ok"`.
+
+## Run the frontend
+
+In a second terminal:
+
+```bash
+cd ../vs-frontend
+bun install
+bun run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). The Vite development
+proxy and the frontend API client use `http://localhost:3000` by default. To
+use another API URL, set `VITE_API_URL` in `vs-frontend/.env`, including the
+`/api` path, for example:
+
+```dotenv
+VITE_API_URL=http://localhost:3000/api
+VITE_AUTH_ORIGIN=http://localhost:5173
+```
+
+## Useful commands
+
+```bash
+bun run build          # Generate Prisma Client and compile TypeScript
+bun run test           # Run the backend tests
+bun run test:coverage  # Run tests with coverage
+bunx prisma studio    # Inspect the local database
+```
+
+## API routes
+
+### Public routes
+
+- `GET /healthz` — health check
+- `GET /api/documents/verify/:token` — verify a document by token
+- `POST /api/documents/verify-file` — verify an uploaded document
+
+### Authenticated routes
+
+- `POST /api/organization/generate-keys`
+- `GET /api/organization/dashboard-stats`
+- `POST /api/documents/upload-and-sign`
+- `GET /api/documents/list`
+- `POST /api/documents/revoke`
+- `GET /api/documents/verification-logs`
 
 ## Project structure
 
-- src/index.ts — Express app entry point and API setup
-- src/routes/organizationRoutes.ts — organization-related routes
-- src/routes/documentRoutes.ts — document-related routes
-- src/controllers/organizationController.ts — organization logic and stats
-- src/controllers/documentController.ts — signing, verification, and log logic
-- src/lib/auth.ts — Better Auth configuration
-- src/middlewares/authMiddleware.ts — auth middleware
-- src/services/cryptoService.ts — RSA and hashing utilities
-- src/services/emailService.ts — invitation and email sending logic
-- prisma/schema.prisma — database schema
-- public/ — static assets
+- `src/index.ts` — Express app entry point and API setup
+- `src/routes/organizationRoutes.ts` — organization routes
+- `src/routes/documentRoutes.ts` — document routes
+- `src/controllers/organizationController.ts` — organization logic and stats
+- `src/controllers/documentController.ts` — signing, verification, and logs
+- `src/lib/auth.ts` — Better Auth configuration
+- `src/middlewares/authMiddleware.ts` — authentication middleware
+- `src/services/cryptoService.ts` — RSA and hashing utilities
+- `src/services/emailService.ts` — invitation email logic
+- `prisma/schema.prisma` — database schema
 
-## Key routes
+## Production
 
-### Public routes
-- GET /healthz — health check
-- GET /api/documents/verify/:token — verify document by token
-- POST /api/documents/verify-file — verify document by uploaded file content
+For production, provide production values for all environment variables,
+especially `BETTER_AUTH_URL`, `DATABASE_URL`, and `FRONTEND_URL`. Apply
+migrations with `bunx prisma migrate deploy`, then build and start the
+compiled API using the deployment platform's configured start command.
 
-### Authenticated routes
-- POST /api/organization/generate-keys
-- GET /api/organization/dashboard-stats
-- POST /api/documents/upload-and-sign
-- GET /api/documents/list
-- POST /api/documents/revoke
-- GET /api/documents/verification-logs
-
-## Database model
-
-The application stores the following core entities:
-- User
-- Organization
-- Member
-- Invitation
-- SignedDocument
-- VerificationLog
-
-Signed documents include:
-- title
-- original filename
-- file URL
-- document hash
-- digital signature
-- verification token
-- status
-- signer and organization references
-
-## Notes
-
-This repository is the backend API layer. It does not appear to include a frontend web app in the same workspace; instead, it is meant to power a client application that interacts with these endpoints.
-
-
-## Intended use
-
-This backend is best suited for scenarios where an organization needs to:
-- issue verifiable documents
-- prove authenticity with cryptographic signatures
-- provide a secure verification workflow for recipients or auditors
-- monitor document trust and verification history
